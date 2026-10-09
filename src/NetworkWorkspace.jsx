@@ -78,6 +78,7 @@ function ExchangeEventCard({ exchange, data, onActionStatus }) {
 function ContactExchangeHistory({ data, contact, onCreate, onAddEvent, onActionStatus, onCaseStatus, onGenerateProductPdf, onCreateProforma }) {
   const [caseFilter, setCaseFilter] = useState('all');
   const [caseSearch, setCaseSearch] = useState('');
+  const [selectedCaseId, setSelectedCaseId] = useState(null);
   const caseLinks = data.crm_exchange_case_contacts || [];
   const cases = (data.crm_exchange_cases || []).filter((exchangeCase) => exchangeCase.contact_id === contact.id || caseLinks.some((link) => link.case_id === exchangeCase.id && link.contact_id === contact.id));
   const followUpCount = cases.filter((exchangeCase) => !['closed_no_followup', 'converted'].includes(exchangeCase.status)).length;
@@ -87,15 +88,19 @@ function ContactExchangeHistory({ data, contact, onCreate, onAddEvent, onActionS
     const matchesFilter = caseFilter === 'all' || (caseFilter === 'follow_up' && !isClosed) || (caseFilter === 'closed' && isClosed);
     return matchesFilter && `${exchangeCase.title || ''} ${caseKindLabels[exchangeCase.case_kind] || ''}`.toLocaleLowerCase().includes(caseSearch.trim().toLocaleLowerCase());
   }).sort((a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0));
+  const activeCase = filteredCases.find((exchangeCase) => exchangeCase.id === selectedCaseId) || filteredCases[0] || null;
   const caseIds = new Set(cases.map((exchangeCase) => exchangeCase.id));
   const caseEvents = (data.crm_exchanges || []).filter((exchange) => caseIds.has(exchange.case_id));
   const legacyEvents = (data.crm_exchanges || []).filter((exchange) => !exchange.case_id && exchange.contact_id === contact.id);
   if (!cases.length && !legacyEvents.length) return <div className="network-exchange-empty"><MessageSquare size={21} /><strong>Aucun échange pour le moment</strong><p>Utilise « Nouvel échange » pour consigner une demande, garder les réponses et planifier la relance.</p></div>;
-  return <div className="network-exchange-content">
-    <div className="network-exchange-overview"><div className="network-exchange-stats"><span><strong>{cases.length}</strong> dossier{cases.length > 1 ? 's' : ''}</span><span><strong>{followUpCount}</strong> à suivre</span><span><strong>{caseEvents.length + legacyEvents.length}</strong> échange{caseEvents.length + legacyEvents.length > 1 ? 's' : ''}</span></div><div className="network-exchange-filters" role="group" aria-label="Filtrer les dossiers"><button type="button" className={caseFilter === 'all' ? 'is-active' : ''} onClick={() => setCaseFilter('all')}>Tous <span>{cases.length}</span></button><button type="button" className={caseFilter === 'follow_up' ? 'is-active' : ''} onClick={() => setCaseFilter('follow_up')}>À suivre <span>{followUpCount}</span></button><button type="button" className={caseFilter === 'closed' ? 'is-active' : ''} onClick={() => setCaseFilter('closed')}>Clôturés <span>{closedCount}</span></button></div></div>
-    {cases.length > 0 && <label className="search-input network-case-search"><Search size={15} /><input type="search" value={caseSearch} onChange={(event) => setCaseSearch(event.target.value)} placeholder="Retrouver un dossier…" aria-label="Rechercher un dossier d’échange" /></label>}
-    <div className="network-exchange-list">
-    {filteredCases.map((exchangeCase) => {
+  return <div className="network-exchange-layout">
+    <aside className="network-case-sidebar">
+      <div className="network-exchange-overview"><div className="network-exchange-stats"><span><strong>{cases.length}</strong> dossier{cases.length > 1 ? 's' : ''}</span><span><strong>{followUpCount}</strong> à suivre</span><span><strong>{caseEvents.length + legacyEvents.length}</strong> échange{caseEvents.length + legacyEvents.length > 1 ? 's' : ''}</span></div><div className="network-exchange-filters" role="group" aria-label="Filtrer les dossiers"><button type="button" className={caseFilter === 'all' ? 'is-active' : ''} onClick={() => setCaseFilter('all')}>Tous <span>{cases.length}</span></button><button type="button" className={caseFilter === 'follow_up' ? 'is-active' : ''} onClick={() => setCaseFilter('follow_up')}>À suivre <span>{followUpCount}</span></button><button type="button" className={caseFilter === 'closed' ? 'is-active' : ''} onClick={() => setCaseFilter('closed')}>Clôturés <span>{closedCount}</span></button></div></div>
+      {cases.length > 0 && <label className="search-input network-case-search"><Search size={15} /><input type="search" value={caseSearch} onChange={(event) => setCaseSearch(event.target.value)} placeholder="Retrouver un dossier…" aria-label="Rechercher un dossier d’échange" /></label>}
+      <nav className="network-case-nav" aria-label="Dossiers de ce contact">{filteredCases.map((exchangeCase) => { const eventCount = caseEvents.filter((exchange) => exchange.case_id === exchangeCase.id).length; const isClosed = ['closed_no_followup', 'converted'].includes(exchangeCase.status); return <button type="button" key={exchangeCase.id} className={`network-case-nav-item${activeCase?.id === exchangeCase.id ? ' is-active' : ''}`} aria-current={activeCase?.id === exchangeCase.id ? 'true' : undefined} onClick={() => setSelectedCaseId(exchangeCase.id)}><span className="network-case-nav-kind">{caseKindLabels[exchangeCase.case_kind] || 'Dossier'}</span><strong>{exchangeCase.title}</strong><span className="network-case-nav-meta"><span className={`network-case-status-dot${isClosed ? ' is-closed' : ''}`} />{caseStatusLabels[exchangeCase.status] || 'En cours'} · {eventCount} échange{eventCount === 1 ? '' : 's'}</span></button>; })}{cases.length > 0 && filteredCases.length === 0 && <div className="network-case-nav-empty">Aucun dossier ne correspond.</div>}{cases.length === 0 && <div className="network-case-nav-empty">Aucun dossier créé pour ce contact.</div>}</nav>
+    </aside>
+    <main className="network-case-main">
+    {activeCase ? (() => { const exchangeCase = activeCase;
       const events = caseEvents.filter((exchange) => exchange.case_id === exchangeCase.id).sort((a, b) => new Date(a.occurred_at) - new Date(b.occurred_at));
       const otherContacts = caseLinks.filter((link) => link.case_id === exchangeCase.id).map((link) => data.network_contacts.find((person) => person.id === link.contact_id)).filter((person) => person && person.id !== contact.id);
       const productIds = [...new Set(events.flatMap((exchange) => (data.crm_exchange_products || []).filter((item) => item.exchange_id === exchange.id).map((item) => item.product_id)))];
@@ -116,10 +121,9 @@ function ContactExchangeHistory({ data, contact, onCreate, onAddEvent, onActionS
         {productIds.length > 0 && <button type="button" className="button button-quiet button-small" onClick={() => onGenerateProductPdf(productIds)}><FileDown size={14} /> Préparer un listing PDF des produits</button>}
         <button type="button" className="button button-quiet button-small" onClick={() => onAddEvent(exchangeCase)}>+ Ajouter un appel, message ou suivi</button>
       </section>;
-    })}
-    {cases.length > 0 && filteredCases.length === 0 && <div className="network-exchange-filter-empty"><strong>Aucun dossier dans cette vue</strong><span>Modifie le filtre ou la recherche.</span></div>}
+    })() : <div className="network-case-main-empty"><MessageSquare size={20} /><strong>{cases.length ? 'Aucun dossier dans cette vue' : 'Aucun dossier sélectionné'}</strong><span>{cases.length ? 'Modifie le filtre ou la recherche.' : 'Crée un nouvel échange pour commencer le suivi.'}</span></div>}
     {legacyEvents.length > 0 && <section className="network-exchange-legacy"><h4>Échanges enregistrés précédemment</h4>{legacyEvents.sort((a, b) => new Date(a.occurred_at) - new Date(b.occurred_at)).map((exchange) => <ExchangeEventCard key={exchange.id} exchange={exchange} data={data} onActionStatus={onActionStatus} />)}</section>}
-    </div>
+    </main>
   </div>;
 }
 
