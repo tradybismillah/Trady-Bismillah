@@ -1,0 +1,21 @@
+{
+  "id": "/",
+  "name": "Atelier — Catalogue produits",
+  "short_name": "Catalogue",
+  "description": "Catalogue partagé de produits, marques et fabricants.",
+  "lang": "fr-FR",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f6f7f3",
+  "theme_color": "#f6f7f3",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

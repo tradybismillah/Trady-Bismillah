@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+.DS_Store
+.vercel/
+.agents/
+.freebuff/
+produitsddd-2026-10-05.tsv
+supabase/.temp/
+supabase/import_produits.sql
+supabase/pre_access_control*.sql
