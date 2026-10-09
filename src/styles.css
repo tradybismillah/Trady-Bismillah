@@ -1197,6 +1197,13 @@ h1, h2, h3, p { margin-top: 0; }
 .product-record-info-group > h3 { margin: 0; color: #405747; font-size: 11px; }
 .product-record-info-group .network-detail-grid { margin: 0; }
 .product-record-info-group .network-detail-item { padding: 8px; border: 1px solid #edf0eb; background: #fff; }
+.product-record-entities { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.product-record-entity-card { display: flex; min-width: 0; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid #e2e9df; border-radius: 9px; background: #fff; }
+.product-record-entity-logo { display: grid; flex: 0 0 58px; width: 58px; height: 58px; overflow: hidden; place-items: center; border: 1px solid #edf0eb; border-radius: 8px; background: #fafbf9; color: #7c8b7e; font-size: 20px; font-weight: 650; }
+.product-record-entity-logo img { width: 100%; height: 100%; object-fit: contain; padding: 4px; }
+.product-record-entity-copy { display: grid; min-width: 0; gap: 4px; }
+.product-record-entity-copy small { color: #849086; font-size: 9px; }
+.product-record-entity-copy strong { overflow-wrap: anywhere; color: #405747; font-size: 11px; line-height: 1.4; }
 .product-record-modal .product-history-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; }
 .product-record-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 24px; border-top: 1px solid #e6ebe4; background: #fff; color: #8a958b; font-size: 9px; }
 .product-history-entry-heading > div { display: grid; gap: 4px; }
