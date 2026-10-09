@@ -997,20 +997,47 @@ h1, h2, h3, p { margin-top: 0; }
 .network-record-card { cursor: pointer; }
 .network-record-card:focus-visible, .product-open-card:focus-visible { outline: 3px solid #3d7048; outline-offset: 2px; }
 .network-detail-grid { margin-top: 8px; }
-.network-contact-modal { position: relative; }
+.network-contact-modal { position: relative; display: grid; gap: 0; }
+.network-contact-modal > .modal-heading { position: sticky; z-index: 4; top: -24px; margin: -24px -24px 14px; padding: 18px 24px 12px; border-bottom: 1px solid #edf0eb; background: rgb(255 255 255 / 96%); backdrop-filter: blur(8px); }
+.network-contact-hero { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; padding: 12px; border: 1px solid #e6ece4; border-radius: 11px; background: linear-gradient(110deg, #f7faf6, #fff); }
+.network-contact-hero-avatar { display: grid; flex: 0 0 42px; width: 42px; height: 42px; overflow: hidden; place-items: center; border-radius: 50%; background: #e8f0e6; color: #47714e; }
+.network-contact-hero-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.network-contact-hero-copy { display: grid; flex: 1; min-width: 0; gap: 4px; }
+.network-contact-hero-copy > span { overflow: hidden; color: #465a4a; font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.network-contact-hero-copy > small { overflow: hidden; color: #7b877d; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.network-contact-quick-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.network-contact-quick-actions .button { text-decoration: none; }
+.network-contact-modal > .eyebrow { margin: 0 0 8px; }
 .network-contact-detail-tabs { display: flex; gap: 5px; margin: 4px 0 14px; border-bottom: 1px solid #e8ece6; }
 .network-contact-detail-tabs button { display: inline-flex; align-items: center; gap: 7px; margin-bottom: -1px; padding: 9px 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #718076; cursor: pointer; font: inherit; font-size: 12px; }
 .network-contact-detail-tabs button.is-active { border-bottom-color: #39734c; color: #315d3d; font-weight: 650; }
 .network-contact-detail-tabs button span { display: grid; min-width: 19px; height: 19px; place-items: center; border-radius: 10px; background: #eef3ed; color: #53675a; font-size: 10px; }
 .network-contact-details-panel { padding-bottom: 2px; }
+.network-detail-section { display: grid; gap: 7px; margin: 0 0 14px; }
+.network-detail-section > h3 { margin: 0; color: #3f5745; font-size: 11px; }
+.network-detail-section .network-detail-grid { margin: 0; }
 .network-exchange-panel { display: grid; gap: 12px; }
 .network-exchange-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.network-exchange-heading h3 { margin: 0; color: #334b3b; font-size: 14px; }
+.network-exchange-heading h3 { margin: 3px 0 0; color: #334b3b; font-size: 16px; }
 .network-exchange-heading p { margin: 4px 0 0; color: #758177; font-size: 11px; }
-.network-exchange-fab { position: sticky; z-index: 2; bottom: 10px; display: grid; flex: 0 0 44px; width: 44px; height: 44px; place-items: center; border: 0; border-radius: 50%; background: #2f7043; box-shadow: 0 5px 16px #23462c38; color: #fff; cursor: pointer; }
-.network-exchange-fab:hover { background: #265d38; transform: translateY(-1px); }
+.network-exchange-fab { flex: 0 0 auto; white-space: nowrap; }
+.network-exchange-overview { display: grid; gap: 10px; padding: 11px; border: 1px solid #e8ede6; border-radius: 10px; background: #fbfcfa; }
+.network-exchange-stats { display: flex; flex-wrap: wrap; gap: 8px 18px; color: #7b877c; font-size: 10px; }
+.network-exchange-stats strong { margin-right: 3px; color: #3e5945; font-size: 14px; }
+.network-exchange-filters { display: flex; flex-wrap: wrap; gap: 5px; }
+.network-exchange-filters button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: #69776b; cursor: pointer; font: inherit; font-size: 10px; }
+.network-exchange-filters button.is-active { border-color: #dbe7d9; background: #edf4eb; color: #315d3d; font-weight: 650; }
+.network-exchange-filters button span { color: #809083; }
+.network-case-search { min-height: 38px; }
+.network-exchange-content { display: grid; gap: 10px; }
+.network-exchange-filter-empty { display: grid; gap: 4px; padding: 20px; border: 1px dashed #dbe4d8; border-radius: 10px; color: #728075; text-align: center; font-size: 11px; }
+.network-exchange-filter-empty strong { color: #4d6252; }
 .network-exchange-form { display: grid; gap: 12px; padding: 14px; border: 1px solid #dfe8dc; border-radius: 10px; background: #fafcf9; }
 .network-exchange-form-heading { display: flex; align-items: center; justify-content: space-between; color: #35533e; font-size: 13px; }
+.network-form-section-label { display: flex; align-items: baseline; gap: 7px; padding-top: 3px; color: #405747; }
+.network-form-section-label > span { display: grid; flex: 0 0 19px; width: 19px; height: 19px; place-items: center; border-radius: 50%; background: #e8f0e6; color: #42704d; font-size: 10px; font-weight: 700; }
+.network-form-section-label > strong { font-size: 11px; }
+.network-form-section-label > small { color: #829085; font-size: 10px; }
 .network-exchange-task { display: grid; gap: 9px; padding-top: 10px; border-top: 1px solid #e6ece3; }
 .network-exchange-task > strong { display: flex; align-items: center; gap: 7px; color: #506254; font-size: 11px; }
 .network-exchange-products { display: grid; gap: 9px; padding-top: 10px; border-top: 1px solid #e6ece3; }
@@ -1163,6 +1190,14 @@ h1, h2, h3, p { margin-top: 0; }
   .modal-heading { top: -17px; margin: -17px -17px 17px; padding: 13px; }
   .modal-actions { flex-wrap: wrap; }
   .modal-actions .button { flex: 1; }
+  .network-contact-modal > .modal-heading { top: -17px; margin: -17px -17px 12px; padding: 14px 17px 10px; }
+  .network-contact-hero { align-items: flex-start; flex-wrap: wrap; }
+  .network-contact-quick-actions { width: 100%; justify-content: flex-start; padding-left: 54px; }
+  .network-exchange-heading { align-items: flex-start; }
+  .network-exchange-fab { min-height: 38px; padding: 8px 10px; font-size: 11px; }
+  .network-exchange-filters { overflow-x: auto; flex-wrap: nowrap; }
+  .network-form-section-label { flex-wrap: wrap; }
+  .network-form-section-label > small { flex: 1 0 100%; padding-left: 26px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
