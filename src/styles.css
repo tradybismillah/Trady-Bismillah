@@ -1172,11 +1172,37 @@ h1, h2, h3, p { margin-top: 0; }
 .network-exchange-empty { display: grid; justify-items: center; gap: 7px; padding: 28px 16px; border: 1px dashed #dbe4d8; border-radius: 10px; color: #738076; text-align: center; }
 .network-exchange-empty > strong { color: #4d6252; font-size: 12px; }
 .network-exchange-empty p { max-width: 300px; margin: 0 0 5px; font-size: 11px; line-height: 1.5; }
-.product-record-modal { display: grid; gap: 14px; }
-.product-record-modal .modal-heading { margin-bottom: 0; }
-.product-record-modal .product-detail-tabs { margin-bottom: 0; }
-.product-record-info { display: grid; gap: 11px; max-height: 48vh; overflow: auto; }
-.product-record-info .network-related-contacts { margin: 0; }
+.product-record-modal { display: grid; width: min(1240px, calc(100vw - 56px)); max-height: 92vh; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 0; overflow: hidden; padding: 0; }
+.product-record-hero { position: relative; display: grid; grid-template-columns: 152px minmax(0, 1fr) auto; align-items: center; gap: 20px; padding: 24px 58px 22px 24px; border-bottom: 1px solid #e6ece3; background: linear-gradient(115deg, #f3f7f1, #fff 68%); }
+.product-record-image { display: grid; width: 152px; height: 152px; overflow: hidden; place-items: center; border: 1px solid #e6ebe3; border-radius: 12px; background: #fff; color: #8c9c8e; }
+.product-record-image img { width: 100%; height: 100%; object-fit: contain; }
+.product-record-summary { display: grid; min-width: 0; align-content: center; gap: 9px; }
+.product-record-summary > .reference-label { color: #738176; font-size: 9px; letter-spacing: .55px; }
+.product-record-summary h2 { margin: 0; color: #2f4635; font-size: clamp(20px, 2.3vw, 29px); line-height: 1.2; letter-spacing: -.5px; }
+.product-record-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.product-record-tags > span { padding: 5px 8px; border: 1px solid #e1e8de; border-radius: 99px; background: #fff; color: #586b5b; font-size: 10px; }
+.product-record-codes { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 3px; }
+.product-record-codes > span { display: grid; gap: 3px; }
+.product-record-codes small { color: #849086; font-size: 9px; }
+.product-record-codes strong { color: #45594a; font-size: 11px; }
+.product-record-hero-actions { display: grid; align-content: center; gap: 8px; }
+.product-record-hero-actions .button { justify-content: center; white-space: nowrap; }
+.product-record-close { position: absolute; top: 12px; right: 12px; }
+.product-record-modal .product-detail-tabs { min-height: 48px; gap: 4px; padding: 0 24px; border-bottom: 1px solid #e6ebe4; background: #fff; }
+.product-record-modal .product-detail-tabs button { position: relative; min-height: 48px; padding: 0 14px; font-size: 11px; }
+.product-record-info, .product-record-modal .product-history-panel { display: grid; align-content: start; min-height: 0; gap: 13px; overflow: auto; padding: 18px 24px; }
+.product-record-info { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.product-record-info-group { display: grid; align-content: start; gap: 8px; margin: 0; padding: 13px; border: 1px solid #e5ebe3; border-radius: 10px; background: #fbfcfa; }
+.product-record-info-group.is-identification { grid-column: 1 / -1; background: #f6f9f4; }
+.product-record-info-group > h3 { margin: 0; color: #405747; font-size: 11px; }
+.product-record-info-group .network-detail-grid { margin: 0; }
+.product-record-info-group .network-detail-item { padding: 8px; border: 1px solid #edf0eb; background: #fff; }
+.product-record-modal .product-history-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; }
+.product-record-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 24px; border-top: 1px solid #e6ebe4; background: #fff; color: #8a958b; font-size: 9px; }
+.product-history-entry-heading > div { display: grid; gap: 4px; }
+.product-history-entry-heading > div > small, .product-history-contact { color: #77847a; font-size: 10px; }
+.product-history-entry { align-content: start; }
+.product-record-modal .product-history-empty { grid-column: 1 / -1; padding: 24px; text-align: center; }
 .product-name-button { padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; text-align: left; }
 .product-name-button:hover { color: var(--green); text-decoration: underline; }
 .product-record-modal .product-history-panel { max-height: 45vh; overflow: auto; }
@@ -1269,6 +1295,14 @@ h1, h2, h3, p { margin-top: 0; }
   .network-form-section-label > small { flex: 1 0 100%; padding-left: 26px; }
 }
 @media (max-width: 760px) {
+  .product-record-modal { width: 100%; max-height: 94dvh; }
+  .product-record-hero { grid-template-columns: 112px minmax(0, 1fr); gap: 14px; padding: 18px 46px 14px 16px; }
+  .product-record-image { width: 112px; height: 112px; }
+  .product-record-hero-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; }
+  .product-record-hero-actions .button { flex: 1; }
+  .product-record-modal .product-detail-tabs { overflow-x: auto; padding: 0 12px; }
+  .product-record-info, .product-record-modal .product-history-panel { padding: 14px; }
+  .product-record-footer { padding: 10px 14px; }
   .network-contact-modal { width: 100%; max-height: 94dvh; }
   .network-contact-details-panel { grid-template-columns: 1fr; }
   .network-exchange-layout { height: auto; min-height: 0; grid-template-columns: 1fr; }
@@ -1288,6 +1322,17 @@ h1, h2, h3, p { margin-top: 0; }
   .business-action-card-controls .field { grid-column: 1 / -1; }
 }
 @media (max-width: 420px) {
+  .product-record-hero { grid-template-columns: 78px minmax(0, 1fr); gap: 10px; padding: 16px 42px 12px 12px; }
+  .product-record-image { width: 78px; height: 78px; border-radius: 8px; }
+  .product-record-summary { gap: 6px; }
+  .product-record-summary h2 { font-size: 18px; }
+  .product-record-tags { gap: 4px; }
+  .product-record-tags > span { padding: 4px 6px; font-size: 9px; }
+  .product-record-codes { gap: 10px; }
+  .product-record-info { grid-template-columns: 1fr; }
+  .product-record-info-group.is-identification { grid-column: auto; }
+  .product-record-modal .product-history-panel { grid-template-columns: 1fr; }
+  .product-record-hero-actions .button { min-height: 36px; padding: 7px; font-size: 10px; }
   .action-overview-card > span { gap: 4px; font-size: 9px; }
   .action-overview-card > strong { font-size: 21px; }
   .action-view-tabs > button { padding: 7px 8px; font-size: 10px; }
