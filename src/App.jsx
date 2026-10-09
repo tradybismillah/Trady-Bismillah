@@ -290,6 +290,7 @@ function App() {
   const [error, setError] = useState(null);
   const [pdfRequest, setPdfRequest] = useState(null);
   const [documentRequest, setDocumentRequest] = useState(null);
+  const [contactExchangeRequest, setContactExchangeRequest] = useState(null);
   
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
@@ -303,6 +304,10 @@ function App() {
   const startDocumentFromCase = (request) => {
     setDocumentRequest({ ...request, requestId: crypto.randomUUID() });
     setActivePage('trade');
+  };
+  const openContactExchange = (contactId, caseId) => {
+    setContactExchangeRequest({ contactId, caseId, requestId: crypto.randomUUID() });
+    setActivePage('network');
   };
 
   const refreshMediaUrls = useCallback(async () => {
@@ -616,7 +621,7 @@ function App() {
           )}
           {(activePage === 'brands' || activePage === 'manufacturers') && <CatalogDirectory kind={activePage} data={data} client={supabase} onRefresh={loadData} notify={(message, isError = false) => setNotice({ message, isError })} />}
           {activePage === 'media' && <MediaLibrary data={data} client={supabase} onRefresh={loadData} notify={(message, isError = false) => setNotice({ message, isError })} />}
-          {activePage === 'network' && <NetworkWorkspace data={data} client={supabase} onRefresh={loadData} notify={(message, isError = false) => setNotice({ message, isError })} onCreateProforma={startDocumentFromCase} onGenerateProductPdf={(ids) => { const productsForPdf = data.products.filter((product) => ids.includes(product.id)); if (productsForPdf.length) setPdfRequest({ products: productsForPdf, multiple: true }); }} />}
+          {activePage === 'network' && <NetworkWorkspace data={data} client={supabase} onRefresh={loadData} notify={(message, isError = false) => setNotice({ message, isError })} onCreateProforma={startDocumentFromCase} contactExchangeRequest={contactExchangeRequest} onContactExchangeRequestHandled={() => setContactExchangeRequest(null)} onGenerateProductPdf={(ids) => { const productsForPdf = data.products.filter((product) => ids.includes(product.id)); if (productsForPdf.length) setPdfRequest({ products: productsForPdf, multiple: true }); }} />}
           {(activePage === 'exchanges' || activePage === 'actions' || activePage === 'trade' || activePage === 'services' || activePage === 'business-settings') && (
             <BusinessWorkspace 
               mode={activePage} 
@@ -624,6 +629,7 @@ function App() {
               client={supabase} 
               notify={(message, isError = false) => setNotice({ message, isError })}
               onRefresh={loadData}
+              onOpenContactExchange={openContactExchange}
               documentRequest={documentRequest}
               onDocumentRequestHandled={() => setDocumentRequest(null)}
             />

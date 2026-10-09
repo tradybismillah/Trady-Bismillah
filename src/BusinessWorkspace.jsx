@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, FileDown, Pencil, Plus, Save, Trash2, Upload } from 'lucide-react';
+import { AlertCircle, CalendarDays, Check, Clock3, FileDown, FolderOpen, Pencil, Plus, Search, Save, Trash2, Upload } from 'lucide-react';
 import Country from 'country-state-city/lib/country';
 import { exchangeProductRates, exchangeProductStoredRates, exchangeProductTotal, formatExchangeCurrency } from './lib/exchangePricing.js';
 import { exchangeScenarioValues, hasExchangeScenario } from './lib/exchangeScenarios.js';
@@ -500,7 +500,7 @@ function printDocument(documentRecord, lines, data) {
   windowRef.document.close();
 }
 
-export default function BusinessWorkspace({ mode, data, client, notify, onRefresh, documentRequest, onDocumentRequestHandled }) {
+export default function BusinessWorkspace({ mode, data, client, notify, onRefresh, documentRequest, onDocumentRequestHandled, onOpenContactExchange }) {
   const [dialog, setDialog] = useState('');
   const [saving, setSaving] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -516,6 +516,8 @@ export default function BusinessWorkspace({ mode, data, client, notify, onRefres
   const [makeAction, setMakeAction] = useState(true);
   const [actionTitle, setActionTitle] = useState('');
   const [actionDue, setActionDue] = useState('');
+  const [actionFilter, setActionFilter] = useState('open');
+  const [actionSearch, setActionSearch] = useState('');
   const [documentDraft, setDocumentDraft] = useState({
     contact_id: '', exchange_id: '', related_document_id: '', document_type: 'proforma',
     document_number: '', document_date: new Date().toISOString().slice(0, 10), status: 'draft', notes: '',
@@ -563,7 +565,7 @@ export default function BusinessWorkspace({ mode, data, client, notify, onRefres
 
   const title = {
     exchanges: ['ÉCHANGES', 'Mémoire des interactions', 'Consignez les échanges, les informations et les alertes; seule une action explicitement créée devient une tâche.'],
-    actions: ['ACTIONS', 'À faire et suivi', 'Les actions proviennent d’un échange source et restent séparées des informations du fil.'],
+    actions: ['ACTIONS', 'Relances des échanges', 'Retrouvez la prochaine action avec son contact, son dossier et le message qui l’a déclenchée.'],
     trade: ['TRADE', 'Documents & opérations', 'Pro-formas, factures, avoirs, paiements et dépenses enregistrés.'],
     services: ['CATALOGUE', 'Services', 'Services proposés, indépendants des fiches produit.'],
     'business-settings': ['CONFIGURATION', 'Mon entreprise', 'Identité émettrice des documents et comptes bancaires proposés pour les virements.'],
@@ -597,6 +599,29 @@ export default function BusinessWorkspace({ mode, data, client, notify, onRefres
       items.sort((a, b) => new Date(a.due_at || a.created_at) - new Date(b.due_at || b.created_at)),
     ]).filter(([, , items]) => items.length);
   }, [data.crm_actions]);
+  const actionCounts = {
+    open: data.crm_actions.filter((action) => !['done', 'cancelled'].includes(action.status)).length,
+    overdue: actionGroups.find(([id]) => id === 'overdue')?.[2].length || 0,
+    done: data.crm_actions.filter((action) => action.status === 'done').length,
+  };
+  const actionExchangeContext = (action) => {
+    const exchange = data.crm_exchanges.find((item) => item.id === action.exchange_id);
+    const exchangeCase = data.crm_exchange_cases.find((item) => item.id === exchange?.case_id);
+    const contact = data.network_contacts.find((person) => person.id === action.contact_id);
+    const products = data.crm_exchange_products.filter((item) => item.exchange_id === exchange?.id)
+      .map((item) => data.products.find((product) => product.id === item.product_id)?.designation).filter(Boolean);
+    return { exchange, exchangeCase, contact, products };
+  };
+  const visibleActionGroups = useMemo(() => actionGroups.map(([groupId, label, actions]) => {
+    const visible = actions.filter((action) => {
+      const matchesFilter = actionFilter === 'all' || (actionFilter === 'open' && !['done', 'cancelled'].includes(action.status)) || (actionFilter === 'overdue' && groupId === 'overdue') || (actionFilter === 'done' && action.status === 'done');
+      if (!matchesFilter) return false;
+      const { exchange, exchangeCase, contact, products } = actionExchangeContext(action);
+      const haystack = [action.title, action.description, contact ? contactLabel(contact) : '', exchangeCase?.title, exchange?.content, ...products].join(' ').toLocaleLowerCase();
+      return haystack.includes(actionSearch.trim().toLocaleLowerCase());
+    });
+    return [groupId, label, visible];
+  }).filter(([, , actions]) => actions.length), [actionGroups, actionFilter, actionSearch, data.crm_exchanges, data.crm_exchange_cases, data.crm_exchange_products, data.network_contacts, data.products]);
   const suggestedTitle = exchangeScenarios.find(([value, , suggestion]) => exchangeDraft.scenario.includes(value) && suggestion)?.[2] || '';
   const availabilityScenarioSelected = ['availability_request', 'availability_announced']
     .some((scenario) => hasExchangeScenario(exchangeDraft.scenario, scenario));
@@ -1069,52 +1094,45 @@ export default function BusinessWorkspace({ mode, data, client, notify, onRefres
         </div>
       </>}
 
-      {mode === 'actions' && <>
+      {mode === 'actions' && <section className="action-workspace">
+        <div className="action-overview-cards">
+          <button type="button" className={`action-overview-card is-overdue${actionFilter === 'overdue' ? ' is-selected' : ''}`} onClick={() => setActionFilter('overdue')}><span><AlertCircle size={17} /> En retard</span><strong>{actionCounts.overdue}</strong><small>À traiter en priorité</small></button>
+          <button type="button" className={`action-overview-card is-today${actionFilter === 'open' ? ' is-selected' : ''}`} onClick={() => setActionFilter('open')}><span><CalendarDays size={17} /> À suivre</span><strong>{actionCounts.open}</strong><small>Actions ouvertes issues des échanges</small></button>
+          <button type="button" className={`action-overview-card${actionFilter === 'done' ? ' is-selected' : ''}`} onClick={() => setActionFilter('done')}><span><Check size={17} /> Terminées</span><strong>{actionCounts.done}</strong><small>Suivis consignés</small></button>
+        </div>
+        <div className="action-toolbar"><div className="action-view-tabs" role="group" aria-label="Filtrer les actions"><button type="button" className={actionFilter === 'open' ? 'is-active' : ''} onClick={() => setActionFilter('open')}>À suivre</button><button type="button" className={actionFilter === 'overdue' ? 'is-active' : ''} onClick={() => setActionFilter('overdue')}>En retard</button><button type="button" className={actionFilter === 'done' ? 'is-active' : ''} onClick={() => setActionFilter('done')}>Terminées</button><button type="button" className={actionFilter === 'all' ? 'is-active' : ''} onClick={() => setActionFilter('all')}>Tout</button></div><label className="search-input action-search"><Search size={15} /><input type="search" value={actionSearch} onChange={(event) => setActionSearch(event.target.value)} placeholder="Action, contact ou dossier…" aria-label="Rechercher dans les actions" /></label></div>
         <div className="action-dashboard">
-          {actionGroups.map(([groupId, label, actions]) => <section className={`action-dashboard-group action-group-${groupId}`} key={groupId}>
+          {visibleActionGroups.map(([groupId, label, actions]) => <section className={`action-dashboard-group action-group-${groupId}`} key={groupId}>
             <h2>{label}<span>{actions.length}</span></h2>
-            <div className="reference-list">{actions.map((action) => {
-              const contact = data.network_contacts.find((person) => person.id === action.contact_id);
-              return <article className="business-action" key={action.id}>
-                <div><strong>{action.title}</strong><small>{contact ? contactLabel(contact) : 'Contact'} · {action.due_at ? displayDate(action.due_at) : 'Sans échéance'}</small>{action.description && <p>{action.description}</p>}</div>
-                <div className="heading-actions">
-                  <select aria-label={`Statut de ${action.title}`} value={action.status} onChange={(event) => setActionStatus(action, event.target.value)}>
-                    {['todo', 'in_progress', 'waiting', 'done', 'cancelled'].map((value) => <option key={value} value={value}>{({ todo: 'À faire', in_progress: 'En cours', waiting: 'En attente', done: 'Terminée', cancelled: 'Annulée' })[value]}</option>)}
-                  </select>
-                  {action.status === 'done' && <button className="button button-quiet button-small" type="button" onClick={() => {
+            <div className="action-card-list">{actions.map((action) => {
+              const { exchange, exchangeCase, contact, products } = actionExchangeContext(action);
+              return <article className={`business-action-card${groupId === 'overdue' ? ' is-overdue' : ''}`} key={action.id}>
+                <div className="business-action-card-main"><div className="business-action-card-title"><span className={`action-priority-dot action-priority-${groupId}`} /><h3>{action.title}</h3></div>
+                  <div className="business-action-context"><strong>{exchangeCase?.title || 'Échange sans dossier'}</strong><span>{contact ? contactLabel(contact) : 'Contact'}{exchange?.occurred_at ? ` · échange du ${displayDate(exchange.occurred_at, false)}` : ''}</span></div>
+                  {exchange?.content && <p className="business-action-source">« {exchange.content} »</p>}
+                  {products.length > 0 && <div className="business-action-products">{products.slice(0, 4).map((product) => <span key={product}>{product}</span>)}{products.length > 4 && <small>+{products.length - 4}</small>}</div>}
+                  <div className="business-action-due"><Clock3 size={13} /><span>{action.due_at ? displayDate(action.due_at) : 'Aucune échéance définie'}</span></div>
+                </div>
+                <div className="business-action-card-controls"><label className="field"><span>Statut</span><select aria-label={`Statut de ${action.title}`} value={action.status} onChange={(event) => setActionStatus(action, event.target.value)}>{['todo', 'in_progress', 'waiting', 'done', 'cancelled'].map((value) => <option key={value} value={value}>{({ todo: 'À faire', in_progress: 'En cours', waiting: 'En attente', done: 'Terminée', cancelled: 'Annulée' })[value]}</option>)}</select></label>
+                  {exchangeCase && contact && <button className="button button-quiet button-small" type="button" onClick={() => onOpenContactExchange?.(contact.id, exchangeCase.id)}><FolderOpen size={14} /> Ouvrir le dossier</button>}
+                  {action.status === 'done' && <button className="button button-primary button-small" type="button" onClick={() => {
                     const source = data.crm_exchanges.find((item) => item.id === action.exchange_id);
                     const now = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-                    setExchangeDraft({
-                      ...emptyExchange,
-                      contact_id: action.contact_id,
-                      occurred_at: now,
-                      direction: 'outgoing',
-                      category: source?.category || 'trade',
-                      scenario: [action.title.toLowerCase().includes('pro-forma') ? 'proforma_sent' : 'other'],
-                    });
-                    setExchangeFormMode('create');
-                    setEditingExchangeId(null);
+                    setExchangeDraft({ ...emptyExchange, contact_id: action.contact_id, occurred_at: now, direction: 'outgoing', category: source?.category || 'trade', scenario: [action.title.toLowerCase().includes('pro-forma') ? 'proforma_sent' : 'other'] });
+                    setExchangeFormMode('create'); setEditingExchangeId(null);
                     const linkedProducts = data.crm_exchange_products.filter((link) => link.exchange_id === action.exchange_id);
                     setExchangeProducts(linkedProducts.map((link) => link.product_id));
-                    setExchangeProductDetails(Object.fromEntries(linkedProducts.map((link) => [
-                      link.product_id,
-                      { packaging_level: link.packaging_level || 'uvc', quantity: link.quantity ?? '', uvc_unit_price: link.uvc_unit_price ?? '' },
-                    ])));
+                    setExchangeProductDetails(Object.fromEntries(linkedProducts.map((link) => [link.product_id, { packaging_level: link.packaging_level || 'uvc', quantity: link.quantity ?? '', uvc_unit_price: link.uvc_unit_price ?? '' }])));
                     setSelectedServices(data.crm_exchange_services.filter((link) => link.exchange_id === action.exchange_id).map((link) => link.service_id));
-                    setTransportDetails({});
-                    setSelectedHandlingTypes([]);
-                    setSelectedStorageTypes([]);
-                    setActionTitle('');
-                    setMakeAction(false);
-                    setDialog('exchange');
-                  }}>Créer l’échange suivant</button>}
+                    setTransportDetails({}); setSelectedHandlingTypes([]); setSelectedStorageTypes([]); setActionTitle(''); setMakeAction(false); setDialog('exchange');
+                  }}>Consigner la suite</button>}
                 </div>
               </article>;
             })}</div>
           </section>)}
-          {!actionGroups.length && <p className="muted">Aucune action à suivre. Les alertes et observations ne sont pas des actions.</p>}
+          {!visibleActionGroups.length && <div className="action-empty-state"><Check size={22} /><strong>Aucune action dans cette vue</strong><p>Les actions sont créées depuis un échange, avec un contact et un contexte de dossier.</p></div>}
         </div>
-      </>}
+      </section>}
 
       {mode === 'trade' && <>
         <Tabs

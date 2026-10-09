@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Building2, CalendarClock, ContactRound, FileDown, FileText, ImagePlus, Mail, MapPin, MessageCircle, MessageSquare, Phone, Plus, Search, Upload, X } from 'lucide-react';
 import { MediaPicker } from './MediaLibrary.jsx';
 import ModalBackdrop from './ModalA11y.jsx';
@@ -75,10 +75,10 @@ function ExchangeEventCard({ exchange, data, onActionStatus }) {
   </article>;
 }
 
-function ContactExchangeHistory({ data, contact, onCreate, onAddEvent, onActionStatus, onCaseStatus, onGenerateProductPdf, onCreateProforma }) {
+function ContactExchangeHistory({ data, contact, initialCaseId, onCreate, onAddEvent, onActionStatus, onCaseStatus, onGenerateProductPdf, onCreateProforma }) {
   const [caseFilter, setCaseFilter] = useState('all');
   const [caseSearch, setCaseSearch] = useState('');
-  const [selectedCaseId, setSelectedCaseId] = useState(null);
+  const [selectedCaseId, setSelectedCaseId] = useState(initialCaseId || null);
   const caseLinks = data.crm_exchange_case_contacts || [];
   const cases = (data.crm_exchange_cases || []).filter((exchangeCase) => exchangeCase.contact_id === contact.id || caseLinks.some((link) => link.case_id === exchangeCase.id && link.contact_id === contact.id));
   const followUpCount = cases.filter((exchangeCase) => !['closed_no_followup', 'converted'].includes(exchangeCase.status)).length;
@@ -127,7 +127,7 @@ function ContactExchangeHistory({ data, contact, onCreate, onAddEvent, onActionS
   </div>;
 }
 
-export default function NetworkWorkspace({ data, client, onRefresh, notify, onGenerateProductPdf, onCreateProforma }) {
+export default function NetworkWorkspace({ data, client, onRefresh, notify, onGenerateProductPdf, onCreateProforma, contactExchangeRequest, onContactExchangeRequestHandled }) {
   const [tab, setTab] = useState('contacts');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
@@ -142,6 +142,7 @@ export default function NetworkWorkspace({ data, client, onRefresh, notify, onGe
   const [savingExchange, setSavingExchange] = useState(false);
   const [exchangeDraft, setExchangeDraft] = useState(null);
   const [activeCaseId, setActiveCaseId] = useState(null);
+  const [focusedCaseId, setFocusedCaseId] = useState(null);
   const [relatedContactIds, setRelatedContactIds] = useState([]);
   const [exchangeFile, setExchangeFile] = useState(null);
   const [selectedProductIds, setSelectedProductIds] = useState([]);
@@ -151,16 +152,30 @@ export default function NetworkWorkspace({ data, client, onRefresh, notify, onGe
   const [productBrandFilter, setProductBrandFilter] = useState('all');
   const companies = data.network_companies || [];
   const contacts = data.network_contacts || [];
+  useEffect(() => {
+    if (!contactExchangeRequest) return;
+    const contact = contacts.find((item) => item.id === contactExchangeRequest.contactId);
+    if (!contact) return;
+    setTab('contacts');
+    setSearch('');
+    setSelected({ kind: 'contact', row: contact });
+    setDetailTab('exchanges');
+    setShowExchangeForm(false);
+    setExchangeDraft(null);
+    setFocusedCaseId(contactExchangeRequest.caseId || null);
+    onContactExchangeRequestHandled?.();
+  }, [contactExchangeRequest, contacts]);
   const rows = useMemo(() => (tab === 'contacts' ? contacts : companies).filter((row) => {
     const company = tab === 'contacts' ? companies.find((entry) => entry.id === row.company_id)?.name : '';
     return `${tab === 'contacts' ? `${row.first_name} ${row.last_name} ${row.job_role}` : row.name} ${company || ''} ${row.email || ''} ${row.city || row.headquarters_city || ''}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase());
   }), [tab, contacts, companies, search]);
   const contactsFor = (company) => contacts.filter((contact) => contact.company_id === company.id);
   const startNew = (kind) => { setSelected(null); setEditing(kind); setDraft({ ...(kind === 'company' ? companyDefaults : contactDefaults) }); setPhotoFile(null); setPhotoPath(''); };
-  const openContact = (row) => { setDetailTab('details'); setShowExchangeForm(false); setExchangeDraft(null); setSelected({ kind: 'contact', row }); };
+  const openContact = (row) => { setDetailTab('details'); setShowExchangeForm(false); setExchangeDraft(null); setFocusedCaseId(null); setSelected({ kind: 'contact', row }); };
   const startContactExchange = (row, exchangeCase = null) => {
     setSelected({ kind: 'contact', row });
     setDetailTab('exchanges');
+    setFocusedCaseId(exchangeCase?.id || null);
     setShowExchangeForm(true);
     setActiveCaseId(exchangeCase?.id || null);
     setExchangeFile(null);
@@ -403,7 +418,7 @@ export default function NetworkWorkspace({ data, client, onRefresh, notify, onGe
             <div className="network-exchange-task"><strong><CalendarClock size={15} /> Prévoir un suivi (facultatif)</strong><div className="form-grid two-columns"><label className="field"><span>Action à faire</span><input value={exchangeDraft.action_title} onChange={(event) => setExchangeDraft((draft) => ({ ...draft, action_title: event.target.value }))} placeholder="Ex. Relancer Marta pour son prix" /></label><label className="field"><span>Échéance</span><input type="datetime-local" value={exchangeDraft.action_due_at} onChange={(event) => setExchangeDraft((draft) => ({ ...draft, action_due_at: event.target.value }))} /></label></div></div>
             <div className="form-actions"><button type="button" className="button button-quiet" disabled={savingExchange} onClick={() => { setShowExchangeForm(false); setExchangeDraft(null); setActiveCaseId(null); setRelatedContactIds([]); setExchangeFile(null); }}>Annuler</button><button type="submit" className="button button-primary" disabled={savingExchange}>{savingExchange ? 'Enregistrement…' : activeCaseId ? 'Ajouter au dossier' : 'Créer le dossier'}</button></div>
           </form>}
-          <ContactExchangeHistory key={detail.id} data={data} contact={detail} onCreate={(exchangeCase) => startContactExchange(detail, exchangeCase)} onAddEvent={(exchangeCase) => startContactExchange(detail, exchangeCase)} onActionStatus={updateActionStatus} onCaseStatus={updateCaseStatus} onGenerateProductPdf={(ids) => onGenerateProductPdf?.(ids)} onCreateProforma={(request) => onCreateProforma?.(request)} />
+          <ContactExchangeHistory key={`${detail.id}:${focusedCaseId || ''}`} data={data} contact={detail} initialCaseId={focusedCaseId} onCreate={(exchangeCase) => startContactExchange(detail, exchangeCase)} onAddEvent={(exchangeCase) => startContactExchange(detail, exchangeCase)} onActionStatus={updateActionStatus} onCaseStatus={updateCaseStatus} onGenerateProductPdf={(ids) => onGenerateProductPdf?.(ids)} onCreateProforma={(request) => onCreateProforma?.(request)} />
         </div>}
       </> : <><div className="network-detail-grid">{companyFields.map(([key, label]) => <div className="network-detail-item" key={key}><small>{label}</small><strong>{valueFor(detail, key)}</strong></div>)}</div><NetworkAssociations kind="company" row={detail} data={data} /><div className="network-related-contacts"><h3>Contacts associés</h3>{contactsFor(detail).length ? contactsFor(detail).map((contact) => <button type="button" key={contact.id} onClick={() => openContact(contact)}>{contact.first_name} {contact.last_name}<small>{contact.job_role || contact.email}</small></button>) : <p>Aucun contact associé. Une société peut exister sans contact nominatif.</p>}</div></>}
       <div className={`modal-actions network-contact-modal-actions${detailKind === 'contact' && detailTab === 'exchanges' ? ' is-minimal' : ''}`}>{(detailKind !== 'contact' || detailTab === 'details') && <button className="button button-danger-ghost" type="button" onClick={() => remove(detail, detailKind)}>Supprimer</button>}<button className="button button-quiet" type="button" onClick={() => setSelected(null)}>Fermer</button>{(detailKind !== 'contact' || detailTab === 'details') && <button className="button button-primary" type="button" onClick={() => startEdit(detail, detailKind)}>Modifier la fiche</button>}</div></section></ModalBackdrop>}

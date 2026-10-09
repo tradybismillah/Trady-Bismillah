@@ -732,6 +732,49 @@ h1, h2, h3, p { margin-top: 0; }
 .business-action select { max-width: 155px; }
 .action-status-filter { align-self: center; padding: 7px 10px; color: #647469; font-size: 11px; font-weight: 650; }
 .action-dashboard { display: grid; gap: 18px; }
+.action-workspace { display: grid; gap: 20px; }
+.action-overview-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.action-overview-card { display: grid; min-height: 112px; grid-template-columns: minmax(0, 1fr) auto; align-content: space-between; gap: 5px 12px; padding: 15px 17px; border: 1px solid #e4e9e2; border-radius: 12px; background: #fff; color: #627166; cursor: pointer; text-align: left; transition: border-color .15s, background .15s, box-shadow .15s; }
+.action-overview-card:hover, .action-overview-card.is-selected { border-color: #a8c1a4; background: #f8fbf7; box-shadow: 0 4px 14px #344f3210; }
+.action-overview-card.is-overdue > span { color: #a64d45; }
+.action-overview-card > span { display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 650; }
+.action-overview-card > strong { grid-column: 2; grid-row: 1 / span 2; align-self: center; color: #405747; font-size: 31px; font-weight: 650; letter-spacing: -1px; }
+.action-overview-card.is-overdue > strong { color: #a64d45; }
+.action-overview-card > small { font-size: 10px; }
+.action-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid #e6ebe4; }
+.action-view-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.action-view-tabs > button { padding: 8px 11px; border: 0; border-radius: 7px; background: transparent; color: #68766a; cursor: pointer; font: inherit; font-size: 11px; }
+.action-view-tabs > button.is-active { background: #edf4eb; color: #315d3d; font-weight: 650; }
+.action-search { width: min(350px, 45%); }
+.action-dashboard { gap: 22px; }
+.action-dashboard-group h2 { gap: 8px; margin-bottom: 10px; font-size: 14px; }
+.action-card-list { display: grid; gap: 9px; }
+.business-action-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(155px, 195px); gap: 16px; padding: 14px 16px; border: 1px solid #e5eae3; border-radius: 11px; background: #fff; }
+.business-action-card.is-overdue { border-left: 3px solid #c57267; }
+.business-action-card-main { display: grid; min-width: 0; align-content: start; gap: 8px; }
+.business-action-card-title { display: flex; align-items: center; gap: 9px; }
+.business-action-card-title h3 { margin: 0; color: #35493a; font-size: 13px; line-height: 1.4; }
+.action-priority-dot { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; background: #719b71; }
+.action-priority-overdue { background: #bd5e53; box-shadow: 0 0 0 3px #faeeec; }
+.action-priority-today { background: #d69a43; box-shadow: 0 0 0 3px #faf3e7; }
+.action-priority-upcoming, .action-priority-unscheduled { background: #7293a7; }
+.action-priority-in_progress { background: #8777ad; }
+.business-action-context { display: grid; gap: 3px; padding: 8px 10px; border-left: 2px solid #dce8d9; border-radius: 0 6px 6px 0; background: #f7f9f6; }
+.business-action-context > strong { overflow: hidden; color: #46604b; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.business-action-context > span { color: #768278; font-size: 10px; }
+.business-action-source { display: -webkit-box; overflow: hidden; margin: 0; color: #667469; font-size: 11px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.business-action-products { display: flex; flex-wrap: wrap; gap: 5px; }
+.business-action-products > span, .business-action-products > small { padding: 4px 7px; border-radius: 99px; background: #eef3eb; color: #586b5a; font-size: 9px; }
+.business-action-due { display: flex; align-items: center; gap: 6px; color: #748176; font-size: 10px; }
+.business-action-card.is-overdue .business-action-due { color: #a64d45; }
+.business-action-card-controls { display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 8px; padding-left: 14px; border-left: 1px solid #edf0eb; }
+.business-action-card-controls .field { gap: 4px; }
+.business-action-card-controls .field > span { color: #78847a; font-size: 9px; }
+.business-action-card-controls select { width: 100%; max-width: none; min-height: 35px; }
+.business-action-card-controls .button { justify-content: center; }
+.action-empty-state { display: grid; justify-items: center; gap: 8px; padding: 45px 20px; border: 1px dashed #dbe4d8; border-radius: 12px; color: #728075; text-align: center; }
+.action-empty-state > strong { color: #45594a; font-size: 13px; }
+.action-empty-state > p { max-width: 360px; margin: 0; font-size: 11px; line-height: 1.5; }
 .action-dashboard-group h2 { display: flex; align-items: center; gap: 9px; margin: 0 0 8px; color: #405747; font-size: 13px; }
 .action-dashboard-group h2 span { display: grid; min-width: 21px; height: 21px; place-items: center; border-radius: 15px; background: #eaf1e8; color: #56745c; font-size: 11px; }
 .action-group-overdue h2 { color: #a64d45; }
@@ -1232,6 +1275,23 @@ h1, h2, h3, p { margin-top: 0; }
   .network-case-sidebar { grid-template-rows: auto auto auto; border-right: 0; border-bottom: 1px solid #e5ebe3; }
   .network-case-nav { max-height: 190px; }
   .network-case-main { min-height: 280px; overflow: visible; padding: 14px; }
+  .action-overview-cards { gap: 7px; }
+  .action-overview-card { min-height: 82px; padding: 10px; }
+  .action-overview-card > small { display: none; }
+  .action-overview-card > strong { font-size: 25px; }
+  .action-toolbar { align-items: stretch; flex-direction: column; }
+  .action-view-tabs { overflow-x: auto; flex-wrap: nowrap; }
+  .action-view-tabs > button { flex: 0 0 auto; }
+  .action-search { width: 100%; }
+  .business-action-card { grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 12px; }
+  .business-action-card-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: end; padding: 10px 0 0; border-top: 1px solid #edf0eb; border-left: 0; }
+  .business-action-card-controls .field { grid-column: 1 / -1; }
+}
+@media (max-width: 420px) {
+  .action-overview-card > span { gap: 4px; font-size: 9px; }
+  .action-overview-card > strong { font-size: 21px; }
+  .action-view-tabs > button { padding: 7px 8px; font-size: 10px; }
+  .business-action-card-controls { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {
