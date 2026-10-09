@@ -128,6 +128,9 @@ export default function NetworkWorkspace({ data, client, onRefresh, notify, onGe
   const [exchangeFile, setExchangeFile] = useState(null);
   const [selectedProductIds, setSelectedProductIds] = useState([]);
   const [exchangeProductDetails, setExchangeProductDetails] = useState({});
+  const [productSearch, setProductSearch] = useState('');
+  const [productCategoryFilter, setProductCategoryFilter] = useState('all');
+  const [productBrandFilter, setProductBrandFilter] = useState('all');
   const companies = data.network_companies || [];
   const contacts = data.network_contacts || [];
   const rows = useMemo(() => (tab === 'contacts' ? contacts : companies).filter((row) => {
@@ -145,6 +148,9 @@ export default function NetworkWorkspace({ data, client, onRefresh, notify, onGe
     setExchangeFile(null);
     setSelectedProductIds([]);
     setExchangeProductDetails({});
+    setProductSearch('');
+    setProductCategoryFilter('all');
+    setProductBrandFilter('all');
     setRelatedContactIds(exchangeCase ? (data.crm_exchange_case_contacts || []).filter((link) => link.case_id === exchangeCase.id).map((link) => link.contact_id) : []);
     setExchangeDraft({ occurred_at: localDateTimeValue(), direction: 'incoming', channel_kind: 'digital', channel: 'whatsapp_message', category: exchangeCase?.category || 'lead', case_kind: exchangeCase?.case_kind || 'other', case_data: exchangeCase?.case_data || {}, entry_kind: 'exchange', content: '', action_title: '', action_due_at: '', case_title: '' });
   };
@@ -295,10 +301,23 @@ export default function NetworkWorkspace({ data, client, onRefresh, notify, onGe
     setSelectedProductIds(productIds);
     setExchangeProductDetails((current) => Object.fromEntries(productIds.map((id) => [id, current[id] || { packaging_level: 'uvc', quantity: '', uvc_unit_price: '' }])));
   };
+  const toggleExchangeProduct = (productId) => {
+    selectExchangeProducts(selectedProductIds.includes(productId)
+      ? selectedProductIds.filter((id) => id !== productId)
+      : [...selectedProductIds, productId]);
+  };
   const updateExchangeProduct = (productId, field, value) => setExchangeProductDetails((current) => ({
     ...current,
     [productId]: { packaging_level: 'uvc', quantity: '', uvc_unit_price: '', ...current[productId], [field]: value },
   }));
+  const exchangeProductResults = useMemo(() => {
+    const query = productSearch.trim().toLocaleLowerCase();
+    return (data.products || []).filter((product) => {
+      const brand = (data.brands || []).find((item) => item.id === product.brand_id)?.name || '';
+      const matchesQuery = !query || [product.designation, product.internal_reference, product.ean_gtin, brand].some((value) => String(value || '').toLocaleLowerCase().includes(query));
+      return matchesQuery && (productCategoryFilter === 'all' || product.category_id === productCategoryFilter) && (productBrandFilter === 'all' || product.brand_id === productBrandFilter);
+    }).sort((a, b) => String(a.designation || '').localeCompare(String(b.designation || ''), 'fr'));
+  }, [data.products, data.brands, productSearch, productCategoryFilter, productBrandFilter]);
   const detailKind = selected?.kind;
   const detail = selected?.row;
   const exchangeCountForContact = (contactId) => {
@@ -338,7 +357,16 @@ export default function NetworkWorkspace({ data, client, onRefresh, notify, onGe
             </div>
             {!activeCaseId && <label className="field"><span>Autres contacts concernés</span><select multiple value={relatedContactIds} onChange={(event) => setRelatedContactIds(Array.from(event.target.selectedOptions, (option) => option.value))}>{contacts.filter((contact) => contact.id !== detail.id).map((contact) => <option key={contact.id} value={contact.id}>{[contact.first_name, contact.last_name].filter(Boolean).join(' ') || contact.email}</option>)}</select><small className="muted">Maintiens Ctrl (ou Cmd sur Mac) pour sélectionner plusieurs contacts. Chaque contact lié retrouvera le même dossier dans sa fiche.</small></label>}
             <label className="field"><span>Compte rendu / information</span><textarea rows="4" value={exchangeDraft.content} onChange={(event) => setExchangeDraft((draft) => ({ ...draft, content: event.target.value }))} placeholder="Note l’échange, les produits, prix, réponses ou prochaines étapes…" /></label>
-            <div className="network-exchange-products"><label className="field"><span>Produits concernés (facultatif)</span><select multiple size="4" value={selectedProductIds} onChange={(event) => selectExchangeProducts(Array.from(event.target.selectedOptions, (option) => option.value))}>{(data.products || []).map((product) => <option key={product.id} value={product.id}>{product.designation}{product.internal_reference ? ` · ${product.internal_reference}` : ''}</option>)}</select></label><small className="muted">Les produits et prix seront enregistrés dans l’historique, à la date et avec l’interlocuteur de cet échange.</small>
+            <div className="network-exchange-products"><div className="network-product-picker-heading"><strong>Produits concernés <span>(facultatif)</span></strong><small>{selectedProductIds.length} sélectionné{selectedProductIds.length > 1 ? 's' : ''}</small></div>
+              <label className="search-input network-product-search"><Search size={15} /><input type="search" value={productSearch} onChange={(event) => setProductSearch(event.target.value)} placeholder="Nom, référence ou code-barres…" aria-label="Rechercher un produit" /></label>
+              <div className="network-product-filters"><label className="field"><span>Catégorie</span><select value={productCategoryFilter} onChange={(event) => setProductCategoryFilter(event.target.value)}><option value="all">Toutes</option>{(data.product_categories || []).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label><label className="field"><span>Marque</span><select value={productBrandFilter} onChange={(event) => setProductBrandFilter(event.target.value)}><option value="all">Toutes</option>{(data.brands || []).map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select></label></div>
+              {selectedProductIds.length > 0 && <div className="network-product-selected" aria-label="Produits sélectionnés">{selectedProductIds.map((productId) => { const product = (data.products || []).find((item) => item.id === productId); return product ? <button type="button" key={productId} onClick={() => toggleExchangeProduct(productId)} title={`Retirer ${product.designation}`}><span>{product.designation}</span><X size={12} /></button> : null; })}</div>}
+              <div className="network-product-results" role="group" aria-label="Résultats produits">
+                {!productSearch.trim() && productCategoryFilter === 'all' && productBrandFilter === 'all' && <p className="muted network-product-empty">Saisis un nom, une référence ou un code-barres, ou choisis une catégorie ou une marque.</p>}
+                {(productSearch.trim() || productCategoryFilter !== 'all' || productBrandFilter !== 'all') && exchangeProductResults.slice(0, 100).map((product) => <label className={`network-product-option${selectedProductIds.includes(product.id) ? ' is-selected' : ''}`} key={product.id}><input type="checkbox" checked={selectedProductIds.includes(product.id)} onChange={() => toggleExchangeProduct(product.id)} /><span><strong>{product.designation}</strong><small>{[product.internal_reference, (data.brands || []).find((item) => item.id === product.brand_id)?.name].filter(Boolean).join(' · ') || 'Sans référence ni marque'}</small></span></label>)}
+                {(productSearch.trim() || productCategoryFilter !== 'all' || productBrandFilter !== 'all') && exchangeProductResults.length === 0 && <p className="muted network-product-empty">Aucun produit ne correspond. Essaie un autre nom, une référence ou un filtre.</p>}
+                {(productSearch.trim() || productCategoryFilter !== 'all' || productBrandFilter !== 'all') && exchangeProductResults.length > 100 && <p className="muted network-product-empty">100 résultats affichés sur {exchangeProductResults.length}. Affine la recherche pour trouver le bon produit.</p>}
+              </div><small className="muted">Recherche par nom, référence, code-barres ou marque. Les produits sélectionnés restent visibles même quand tu changes de filtre. Les prix seront consignés dans l’historique de l’échange.</small>
               {selectedProductIds.map((productId) => {
                 const product = data.products.find((item) => item.id === productId);
                 if (!product) return null;
