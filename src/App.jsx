@@ -14,7 +14,7 @@ import Tabs from './Tabs.jsx';
 
 import {
   ArrowDownToLine, ArrowLeft, ArrowRight, Building2, Check, ChevronDown, CircleHelp, ContactRound, Database, Factory,
-  BriefcaseBusiness, CheckSquare, FileDown, FileText, Grid2X2, ImagePlus, Images, Leaf, List, LoaderCircle, LogOut, Menu, MessageCircle, Package, Plus,
+  BriefcaseBusiness, CheckSquare, FileDown, FileText, Grid2X2, ImagePlus, Images, Leaf, List, LoaderCircle, LogOut, Menu, Package, Plus,
   Pencil, Search, Settings2, Share2, Tags, Trash2, Upload, X,
 } from 'lucide-react';
 
@@ -274,11 +274,11 @@ function NetworkSection({ data, setData, supabase, loadData }) {
 }
 
 function App() {
-  const [activePage, setActivePage] = useState('exchanges');
+  const [activePage, setActivePage] = useState('network');
   const [data, setData] = useState({
     manufacturers: [], brands: [], products: [], network_contacts: [], network_companies: [],
     product_categories: [], product_subcategories: [], product_subcategory_items: [],
-    packaging_types: [], trade_documents: [], crm_exchanges: [], business_bank_accounts: [],
+    packaging_types: [], trade_documents: [], crm_exchanges: [], crm_exchange_cases: [], crm_exchange_case_contacts: [], crm_exchange_case_media: [], business_bank_accounts: [],
     business_profile: null, business_issuers: [], business_services: [],
     business_transport_types: [], business_handling_types: [], business_storage_types: [],
     crm_actions: [], crm_exchange_products: [], crm_exchange_services: [],
@@ -289,6 +289,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [pdfRequest, setPdfRequest] = useState(null);
+  const [documentRequest, setDocumentRequest] = useState(null);
   
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
@@ -299,6 +300,10 @@ function App() {
   const [notice, setNotice] = useState(null);
   const mediaPathsRef = useRef([]);
   const completePdfExport = useCallback(() => setPdfRequest(null), []);
+  const startDocumentFromCase = (request) => {
+    setDocumentRequest({ ...request, requestId: crypto.randomUUID() });
+    setActivePage('trade');
+  };
 
   const refreshMediaUrls = useCallback(async () => {
     if (!supabase || mediaPathsRef.current.length === 0) return;
@@ -407,7 +412,7 @@ function App() {
       };
       const [manufacturers, brands, products, networkContacts, networkCompanies,
         productCategories, productSubcategories, productSubcategoryItems,
-        packagingTypes, tradeDocuments, crmExchanges, businessBankAccounts,
+        packagingTypes, tradeDocuments, crmExchanges, crmExchangeCases, crmExchangeCaseContacts, crmExchangeCaseMedia, businessBankAccounts,
         businessProfileResult, mediaAssets, templates, businessIssuers, businessServices,
         businessTransportTypes, businessHandlingTypes, businessStorageTypes, crmActions,
         crmExchangeProducts, crmExchangeServices, crmExchangeTransports,
@@ -425,6 +430,9 @@ function App() {
         fetchAll(supabase.from('packaging_types').select('*')),
         fetchAll(supabase.from('trade_documents').select('*').order('created_at', { ascending: false })),
         fetchAll(supabase.from('crm_exchanges').select('*').order('occurred_at', { ascending: false })),
+        fetchAll(supabase.from('crm_exchange_cases').select('*').order('updated_at', { ascending: false })),
+        fetchAll(supabase.from('crm_exchange_case_contacts').select('*')),
+        fetchAll(supabase.from('crm_exchange_case_media').select('*')),
         fetchAll(supabase.from('business_bank_accounts').select('*')),
         supabase.from('business_profile').select('*').maybeSingle(),
         fetchAll(supabase.from('media_assets').select('*')),
@@ -478,6 +486,8 @@ function App() {
         product_categories: productCategories,
         product_subcategories: productSubcategories, product_subcategory_items: productSubcategoryItems,
         packaging_types: packagingTypes, trade_documents: tradeDocuments, crm_exchanges: crmExchanges,
+        crm_exchange_cases: crmExchangeCases, crm_exchange_case_contacts: crmExchangeCaseContacts,
+        crm_exchange_case_media: crmExchangeCaseMedia,
         business_bank_accounts: businessBankAccounts, business_profile: businessProfileResult.data,
         business_issuers: businessIssuers, business_services: businessServices,
         business_transport_types: businessTransportTypes,
@@ -514,7 +524,7 @@ function App() {
       setData({
         manufacturers: [], brands: [], products: [], network_contacts: [], network_companies: [],
         product_categories: [], product_subcategories: [], product_subcategory_items: [],
-        packaging_types: [], trade_documents: [], crm_exchanges: [], business_bank_accounts: [],
+        packaging_types: [], trade_documents: [], crm_exchanges: [], crm_exchange_cases: [], crm_exchange_case_contacts: [], crm_exchange_case_media: [], business_bank_accounts: [],
         business_profile: null, business_issuers: [], business_services: [],
         business_transport_types: [], business_handling_types: [], business_storage_types: [],
         crm_actions: [], crm_exchange_products: [], crm_exchange_services: [],
@@ -530,8 +540,7 @@ function App() {
     { id: 'brands', label: 'Marques', icon: <Tags size={18} /> },
     { id: 'manufacturers', label: 'Fabricants', icon: <Factory size={18} /> },
     { id: 'media', label: 'Médiathèque', icon: <Images size={18} /> },
-    { id: 'network', label: 'Réseau', icon: <ContactRound size={18} /> },
-    { id: 'exchanges', label: 'Échanges', icon: <MessageCircle size={18} /> },
+    { id: 'network', label: 'Contacts', icon: <ContactRound size={18} /> },
     { id: 'actions', label: 'Actions', icon: <CheckSquare size={18} /> },
     { id: 'trade', label: 'Trade', icon: <FileText size={18} /> },
     { id: 'services', label: 'Services', icon: <BriefcaseBusiness size={18} /> },
@@ -607,7 +616,7 @@ function App() {
           )}
           {(activePage === 'brands' || activePage === 'manufacturers') && <CatalogDirectory kind={activePage} data={data} client={supabase} onRefresh={loadData} notify={(message, isError = false) => setNotice({ message, isError })} />}
           {activePage === 'media' && <MediaLibrary data={data} client={supabase} onRefresh={loadData} notify={(message, isError = false) => setNotice({ message, isError })} />}
-          {activePage === 'network' && <NetworkWorkspace data={data} client={supabase} onRefresh={loadData} notify={(message, isError = false) => setNotice({ message, isError })} />}
+          {activePage === 'network' && <NetworkWorkspace data={data} client={supabase} onRefresh={loadData} notify={(message, isError = false) => setNotice({ message, isError })} onCreateProforma={startDocumentFromCase} onGenerateProductPdf={(ids) => { const productsForPdf = data.products.filter((product) => ids.includes(product.id)); if (productsForPdf.length) setPdfRequest({ products: productsForPdf, multiple: true }); }} />}
           {(activePage === 'exchanges' || activePage === 'actions' || activePage === 'trade' || activePage === 'services' || activePage === 'business-settings') && (
             <BusinessWorkspace 
               mode={activePage} 
@@ -615,6 +624,8 @@ function App() {
               client={supabase} 
               notify={(message, isError = false) => setNotice({ message, isError })}
               onRefresh={loadData}
+              documentRequest={documentRequest}
+              onDocumentRequestHandled={() => setDocumentRequest(null)}
             />
           )}
         </Suspense>

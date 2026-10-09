@@ -500,7 +500,7 @@ function printDocument(documentRecord, lines, data) {
   windowRef.document.close();
 }
 
-export default function BusinessWorkspace({ mode, data, client, notify, onRefresh }) {
+export default function BusinessWorkspace({ mode, data, client, notify, onRefresh, documentRequest, onDocumentRequestHandled }) {
   const [dialog, setDialog] = useState('');
   const [saving, setSaving] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -535,6 +535,15 @@ export default function BusinessWorkspace({ mode, data, client, notify, onRefres
   const [issuerDraft, setIssuerDraft] = useState(() => defaultIssuer ? { ...defaultIssuer } : emptyIssuer());
   const [creatingIssuer, setCreatingIssuer] = useState(false);
   const [bankName, setBankName] = useState('');
+  useEffect(() => {
+    if (mode !== 'trade' || !documentRequest) return;
+    const issuer = data.business_issuers.find((item) => item.is_default) || data.business_issuers[0];
+    setDocumentDraft((draft) => ({ ...draft, issuer_id: issuer?.id || '', contact_id: documentRequest.contactId || '', exchange_id: documentRequest.exchangeId || '', related_document_id: documentRequest.relatedDocumentId || '', document_type: documentRequest.documentType || 'proforma', status: 'draft', document_number: '' }));
+    setDocumentLines([emptyDocumentLine()]);
+    setDocumentFile(null);
+    setDialog('document');
+    onDocumentRequestHandled?.();
+  }, [mode, documentRequest?.requestId]);
   const documentContact = data.network_contacts.find((contact) => contact.id === documentDraft.contact_id);
   const documentCompany = data.network_companies.find((company) => company.id === documentContact?.company_id);
   const savedDocumentTemplate = data.trade_document_templates.find((template) => template.company_id === documentCompany?.id);
