@@ -13,7 +13,7 @@ import ModalBackdrop from './ModalA11y.jsx';
 import Tabs from './Tabs.jsx';
 
 import {
-  ArrowDownToLine, ArrowLeft, ArrowRight, Building2, Check, ChevronDown, CircleHelp, ContactRound, Database, Factory,
+  ArrowDownToLine, ArrowLeft, ArrowRight, Building2, Check, ChevronDown, CircleHelp, ContactRound, Factory,
   BriefcaseBusiness, CheckSquare, FileDown, FileText, Grid2X2, ImagePlus, Images, Leaf, List, LoaderCircle, LogOut, Menu, Package, Plus,
   Pencil, Search, Settings2, Share2, Tags, Trash2, Upload, X,
 } from 'lucide-react';
@@ -292,12 +292,12 @@ function App() {
     manufacturers: [], brands: [], products: [], network_contacts: [], network_companies: [],
     product_categories: [], product_subcategories: [], product_subcategory_items: [],
     packaging_types: [], trade_documents: [], crm_exchanges: [], crm_exchange_cases: [], crm_exchange_case_contacts: [], crm_exchange_case_media: [], business_bank_accounts: [],
-    business_profile: null, business_issuers: [], business_services: [],
+    business_profile: null, business_issuers: [], business_services: [], business_service_price_history: [],
     business_transport_types: [], business_handling_types: [], business_storage_types: [],
     crm_actions: [], crm_exchange_products: [], crm_exchange_services: [],
     crm_exchange_transports: [], crm_exchange_handling_types: [], crm_exchange_storage_types: [],
     trade_payments: [], trade_expenses: [], trade_document_lines: [],
-    media_assets: [], mediaUrls: {}, templates: [], trade_document_templates: [],
+    media_assets: [], mediaUrls: {}, templates: [], trade_document_templates: [], business_issuer_templates: [],
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -431,7 +431,7 @@ function App() {
       const [manufacturers, brands, products, networkContacts, networkCompanies,
         productCategories, productSubcategories, productSubcategoryItems,
         packagingTypes, tradeDocuments, crmExchanges, crmExchangeCases, crmExchangeCaseContacts, crmExchangeCaseMedia, businessBankAccounts,
-        businessProfileResult, mediaAssets, templates, businessIssuers, businessServices,
+        businessProfileResult, mediaAssets, templates, businessIssuers, businessServices, businessServicePriceHistory, businessIssuerTemplates,
         businessTransportTypes, businessHandlingTypes, businessStorageTypes, crmActions,
         crmExchangeProducts, crmExchangeServices, crmExchangeTransports,
         crmExchangeHandlingTypes, crmExchangeStorageTypes, tradePayments, tradeExpenses,
@@ -457,6 +457,8 @@ function App() {
         fetchAll(supabase.from('trade_document_templates').select('*')),
         fetchAll(supabase.from('business_issuers').select('*')),
         fetchAll(supabase.from('business_services').select('*')),
+        fetchAll(supabase.from('business_service_price_history').select('*').order('effective_at', { ascending: false })),
+        fetchAll(supabase.from('business_issuer_document_templates').select('*')),
         fetchAll(supabase.from('business_transport_types').select('*')),
         fetchAll(supabase.from('business_handling_types').select('*')),
         fetchAll(supabase.from('business_storage_types').select('*')),
@@ -477,18 +479,23 @@ function App() {
       ]);
       if (businessProfileResult.error) throw businessProfileResult.error;
       const paths = [...new Set([
+        '/brand-assets/safras-ineditas.png', '/brand-assets/fikra-matif.png',
         ...mediaAssets.map((asset) => asset.storage_path),
         ...brands.map((brand) => brand.logo_url),
         ...manufacturers.map((manufacturer) => manufacturer.logo_url),
         ...products.flatMap((product) => [product.main_photo_url, product.uvc_photo_url, product.pcb_photo_url, product.palette_photo_url]),
         ...networkContacts.map((contact) => contact.contact_photo_path),
         ...templates.map((template) => template.logo_path),
+        ...businessIssuerTemplates.map((template) => template.logo_path),
         ...tradeDocuments.map((document) => document.file_path),
         ...tradeExpenses.map((expense) => expense.receipt_path),
       ].filter(Boolean))];
-      mediaPathsRef.current = paths.filter((path) => !/^https?:\/\//i.test(path));
-      const mediaUrls = Object.fromEntries(paths.filter((path) => /^https?:\/\//i.test(path)).map((path) => [path, path]));
-      const storagePaths = paths.filter((path) => !/^https?:\/\//i.test(path));
+      mediaPathsRef.current = paths.filter((path) => !/^https?:\/\//i.test(path) && !path.startsWith('/brand-assets/'));
+      const mediaUrls = Object.fromEntries([
+        ...paths.filter((path) => /^https?:\/\//i.test(path)).map((path) => [path, path]),
+        ...paths.filter((path) => path.startsWith('/brand-assets/')).map((path) => [path, new URL(path, window.location.href).href]),
+      ]);
+      const storagePaths = paths.filter((path) => !/^https?:\/\//i.test(path) && !path.startsWith('/brand-assets/'));
       for (let index = 0; index < storagePaths.length; index += 100) {
         const batch = storagePaths.slice(index, index + 100);
         const { data: signedFiles } = await supabase.storage.from('catalogue-media').createSignedUrls(batch, 3600);
@@ -508,6 +515,7 @@ function App() {
         crm_exchange_case_media: crmExchangeCaseMedia,
         business_bank_accounts: businessBankAccounts, business_profile: businessProfileResult.data,
         business_issuers: businessIssuers, business_services: businessServices,
+        business_service_price_history: businessServicePriceHistory,
         business_transport_types: businessTransportTypes,
         business_handling_types: businessHandlingTypes,
         business_storage_types: businessStorageTypes,
@@ -520,6 +528,7 @@ function App() {
         trade_document_lines: tradeDocumentLines,
         media_assets: mediaAssets, mediaUrls, templates,
         trade_document_templates: templates,
+        business_issuer_templates: businessIssuerTemplates,
       });
       setError(null);
     } catch (err) {
@@ -543,7 +552,7 @@ function App() {
         manufacturers: [], brands: [], products: [], network_contacts: [], network_companies: [],
         product_categories: [], product_subcategories: [], product_subcategory_items: [],
         packaging_types: [], trade_documents: [], crm_exchanges: [], crm_exchange_cases: [], crm_exchange_case_contacts: [], crm_exchange_case_media: [], business_bank_accounts: [],
-        business_profile: null, business_issuers: [], business_services: [],
+    business_profile: null, business_issuers: [], business_services: [], business_service_price_history: [],
         business_transport_types: [], business_handling_types: [], business_storage_types: [],
         crm_actions: [], crm_exchange_products: [], crm_exchange_services: [],
         crm_exchange_transports: [], crm_exchange_handling_types: [], crm_exchange_storage_types: [],
@@ -567,11 +576,11 @@ function App() {
 
   // Authentication is required before any workspace data is rendered.
   if (!supabase) {
-    return <div className="auth-screen"><aside className="auth-aside"><div className="brand-mark"><Database size={24} /><strong>Catalogue ERP/CRM</strong></div><div className="auth-quote"><h1>Configuration requise</h1><p>Ajoutez l’URL Supabase et la clé publique dans .env.local.</p></div></aside><main className="auth-main"><p>Supabase n’est pas configuré. Consultez .env.example.</p></main></div>;
+    return <div className="auth-screen"><aside className="auth-aside"><div className="auth-brand-identity"><div className="auth-brand-logos"><img src="/brand-assets/safras-ineditas.png" alt="Safras Ineditas" /><img src="/brand-assets/fikra-matif.png" alt="Fikra Matif" /></div><strong>Trady Bismillah</strong></div><div className="auth-quote"><h1>Configuration requise</h1><p>Ajoutez l’URL Supabase et la clé publique dans .env.local.</p></div></aside><main className="auth-main"><p>Supabase n’est pas configuré. Consultez .env.example.</p></main></div>;
   }
   if (!authReady) return <div className="loading-screen"><LoaderCircle size={28} className="spin" /><p>Vérification de la session…</p></div>;
   if (!user) {
-    return <div className="auth-screen"><aside className="auth-aside"><div className="brand-mark"><Database size={24} /><strong>Catalogue ERP/CRM</strong></div><div className="auth-quote"><h1>Votre espace commercial, au même endroit.</h1><p>Connectez-vous avec le compte créé dans Supabase Authentication. Les inscriptions publiques restent désactivées.</p></div></aside><main className="auth-main"><form className="auth-form" onSubmit={handleSignIn}><h2>Connexion</h2><p className="muted">Utilisez l’adresse e-mail et le mot de passe de votre compte.</p><label className="field"><span>Adresse e-mail</span><input type="email" autoComplete="username" value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} required /></label><label className="field"><span>Mot de passe</span><input type="password" autoComplete="current-password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} required /></label>{authError && <p className="form-error" role="alert">{authError}</p>}<button className="button button-primary button-full" type="submit" disabled={signingIn}>{signingIn ? 'Connexion…' : 'Se connecter'}</button></form></main></div>;
+    return <div className="auth-screen"><aside className="auth-aside"><div className="auth-brand-identity"><div className="auth-brand-logos"><img src="/brand-assets/safras-ineditas.png" alt="Safras Ineditas" /><img src="/brand-assets/fikra-matif.png" alt="Fikra Matif" /></div><strong>Trady Bismillah</strong></div><div className="auth-quote"><h1>Votre espace commercial, au même endroit.</h1><p>Connectez-vous avec le compte créé dans Supabase Authentication. Les inscriptions publiques restent désactivées.</p></div></aside><main className="auth-main"><form className="auth-form" onSubmit={handleSignIn}><h2>Connexion</h2><p className="muted">Utilisez l’adresse e-mail et le mot de passe de votre compte.</p><label className="field"><span>Adresse e-mail</span><input type="email" autoComplete="username" value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} required /></label><label className="field"><span>Mot de passe</span><input type="password" autoComplete="current-password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} required /></label>{authError && <p className="form-error" role="alert">{authError}</p>}<button className="button button-primary button-full" type="submit" disabled={signingIn}>{signingIn ? 'Connexion…' : 'Se connecter'}</button></form></main></div>;
   }
   if (user.email?.toLowerCase() !== authorizedEmail) {
     return <div className="error-page"><h2>Accès refusé</h2><p>Seul le compte {authorizedEmail} est autorisé.</p><button className="button button-primary" onClick={handleSignOut}>Se déconnecter</button></div>;
@@ -593,8 +602,11 @@ function App() {
       {/* Navigation */}
       <nav className="main-nav">
         <div className="nav-brand">
-          <Database size={24} />
-          <span>Catalogue ERP/CRM</span>
+          <div className="nav-company-logos" aria-label="Safras Ineditas et Fikra Matif">
+            <img src="/brand-assets/safras-ineditas.png" alt="Safras Ineditas" />
+            <img src="/brand-assets/fikra-matif.png" alt="Fikra Matif" />
+          </div>
+          <span>Trady Bismillah</span>
         </div>
         <div className="nav-items">
           {navItems.map((item) => (

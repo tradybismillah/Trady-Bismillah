@@ -21,6 +21,8 @@ export default function ModalBackdrop({ onClose, children }) {
   const dialog = useRef(null);
   const trigger = useRef(null);
   const stackRef = useRef(0);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     const root = ensureRoot();
@@ -31,7 +33,7 @@ export default function ModalBackdrop({ onClose, children }) {
     if (previous?.focus) trigger.current = previous;
 
     const handleKey = (event) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') onCloseRef.current();
     };
 
     const handleFocusIn = (event) => {
@@ -79,7 +81,7 @@ export default function ModalBackdrop({ onClose, children }) {
       trigger.current = null;
       releaseRootIfEmpty();
     };
-  }, [onClose]);
+  }, []);
 
   useEffect(() => {
     const root = ensureRoot();
@@ -90,7 +92,7 @@ export default function ModalBackdrop({ onClose, children }) {
         try { node.focus(); } catch {}
       }
     }
-  }, [children]);
+  }, []);
 
   if (!ensureRoot()) return null;
 
