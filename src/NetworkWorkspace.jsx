@@ -283,7 +283,7 @@ export default function NetworkWorkspace({ data, client, onRefresh, notify, onGe
         if (assetError) throw assetError;
       }
       const { data: savedIds, error } = await client.rpc('save_network_records', {
-        p_contact: kind === 'contact' ? { ...draft, first_name: draft.last_name.trim() ? draft.first_name.trim() : '', last_name: draft.last_name.trim() || draft.first_name.trim(), profile: draft.company_id ? 'professional' : draft.profile, company_id: draft.company_id || null } : null,
+        p_contact: kind === 'contact' ? { ...draft, first_name: draft.first_name.trim(), last_name: draft.last_name.trim() || draft.first_name.trim(), profile: draft.company_id ? 'professional' : draft.profile, company_id: draft.company_id || null } : null,
         p_company: kind === 'company' ? { ...draft, legal_identifiers: draft.legal_identifiers || {}, purchase_sales_zones: draft.purchase_sales_zones || [] } : null,
         p_contact_id: kind === 'contact' ? draft.id || null : null,
         p_company_id: kind === 'company' ? draft.id || null : null,
@@ -294,6 +294,11 @@ export default function NetworkWorkspace({ data, client, onRefresh, notify, onGe
         p_company_category_ids: kind === 'company' ? (data.network_company_categories || []).filter((item) => item.company_id === draft.id).map((item) => item.category_id) : [],
       });
       if (error) throw error;
+      if (kind === 'contact' && !draft.last_name.trim() && draft.first_name.trim()) {
+        const contactId = draft.id || savedIds?.contact_id;
+        const { error: nameError } = await client.from('network_contacts').update({ first_name: draft.first_name.trim(), last_name: '' }).eq('id', contactId);
+        if (nameError) throw nameError;
+      }
       if (kind === 'contact' && (uploadedPath || photoPath !== (draft.contact_photo_path || ''))) {
         const contactId = draft.id || savedIds?.contact_id;
         if (contactId) {
