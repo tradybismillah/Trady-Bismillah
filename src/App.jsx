@@ -141,7 +141,7 @@ function ProductRecord({ product, data, onClose, onPhotos, onPdf }) {
     ['PCB', [['Type', typeName(product.pcb_type_id)], ['UVC par PCB', product.quantity_uvc_pcb], ['Dimensions (cm)', [product.pcb_length_cm, product.pcb_width_cm, product.pcb_height_cm].filter(Boolean).join(' × ')], ['Poids brut (kg)', product.pcb_gross_weight_kg], ['Volume (m³)', product.pcb_volume_m3]]],
     ['Palette', [['Type', typeName(product.palette_type_id)], ['PCB par palette', product.quantity_pcb_palette], ['UVC par palette', product.quantity_uvc_palette], ['Dimensions (cm)', [product.palette_length_cm, product.palette_width_cm, product.palette_height_cm].filter(Boolean).join(' × ')], ['Poids brut (kg)', product.palette_gross_weight_kg], ['Volume (m³)', product.palette_volume_m3]]],
   ];
-  const contactName = (exchange) => { const contact = (data.network_contacts || []).find((item) => item.id === exchange.contact_id); return contact ? [contact.first_name, contact.last_name].filter(Boolean).join(' ') || contact.nickname || contact.email || 'Contact' : ''; };
+  const contactName = (exchange) => { const contact = (data.network_contacts || []).find((item) => item.id === exchange.contact_id); return contact ? contact.nickname || [contact.first_name, contact.last_name].filter(Boolean).join(' ') || contact.email || 'Contact' : ''; };
   const caseTitle = (exchange) => (data.crm_exchange_cases || []).find((item) => item.id === exchange.case_id)?.title || '';
   const eventCard = ({ row, exchange }) => <article className="product-history-entry" key={exchange.id}><div className="product-history-entry-heading"><div><strong>{exchange.scenario || exchange.category || 'Échange'}</strong>{caseTitle(exchange) && <small>{caseTitle(exchange)}</small>}</div><span>{exchange.occurred_at ? new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium' }).format(new Date(exchange.occurred_at)) : 'Date non renseignée'}</span></div>{contactName(exchange) && <span className="product-history-contact">Contact · {contactName(exchange)}</span>}<div className="product-history-prices"><span>Quantité<strong>{row.quantity ?? '—'} {row.packaging_level || ''}</strong></span>{row.uvc_unit_price != null && <span>Prix UVC<strong>{row.uvc_unit_price} €</strong></span>}{row.pcb_unit_price != null && <span>Prix PCB<strong>{row.pcb_unit_price} €</strong></span>}{row.palette_unit_price != null && <span>Prix palette<strong>{row.palette_unit_price} €</strong></span>}</div>{exchange.content && <p>{exchange.content}</p>}</article>;
   const visibleInfoGroups = infoGroups.map(([heading, fields]) => [heading, fields.filter(([, value]) => value != null && String(value).trim() !== '')]).filter(([heading, fields]) => heading === 'Identification' || fields.length);
@@ -228,9 +228,10 @@ function NetworkSection({ data, setData, supabase, loadData }) {
   const [selectedType, setSelectedType] = useState('all');
 
   const filteredContacts = data.network_contacts.filter(contact => {
-    const matchesSearch = contact.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         contact.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         contact.email.toLowerCase().includes(searchTerm.toLowerCase());
+    const company = data.network_companies.find((item) => item.id === contact.company_id)?.name || '';
+    const needle = searchTerm.toLocaleLowerCase();
+    const matchesSearch = [contact.first_name, contact.last_name, contact.nickname, contact.email, company]
+      .some((value) => (value || '').toLocaleLowerCase().includes(needle));
     const matchesType = selectedType === 'all' || (selectedType === 'company' && contact.company_id) || 
                        (selectedType === 'individual' && !contact.company_id);
     return matchesSearch && matchesType;
@@ -270,7 +271,7 @@ function NetworkSection({ data, setData, supabase, loadData }) {
         ) : (
           filteredContacts.map(contact => (
             <div key={contact.id} className="contact-card">
-              <h3>{[contact.first_name, contact.last_name].filter(Boolean).join(' ') || contact.nickname || contact.email || 'Contact'}</h3>
+              <h3>{contact.nickname || [contact.first_name, contact.last_name].filter(Boolean).join(' ') || contact.email || 'Contact'}</h3>
               <p className="email">{contact.email}</p>
               {contact.company_id && (
                 <p className="company">

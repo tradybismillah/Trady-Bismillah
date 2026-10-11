@@ -151,7 +151,35 @@ const emptyExchange = {
 };
 
 function contactLabel(contact) {
-  return [contact.first_name, contact.last_name].filter(Boolean).join(' ') || contact.email || contact.id;
+  const nickname = String(contact?.nickname || '').trim();
+  const personName = [contact?.first_name, contact?.last_name]
+    .filter((part) => part && !/^https?:\/\//i.test(String(part).trim()))
+    .join(' ')
+    .trim();
+  return nickname || personName || (String(contact?.email || '').includes('@') ? contact.email : '') || 'Contact';
+}
+
+function contactOptionLabel(contact, companies = []) {
+  const name = contactLabel(contact);
+  const company = companies.find((item) => item.id === contact.company_id)?.name;
+  if (name === 'Contact' && company) return company;
+  return company ? name + ' · ' + company : name;
+}
+
+function ContactSearchField({ label, value, onChange, contacts, companies = [], placeholder, required = false }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const selected = contacts.find((contact) => contact.id === value);
+  const matching = contacts.filter((contact) => {
+    const company = companies.find((item) => item.id === contact.company_id)?.name || '';
+    const terms = [contact.first_name, contact.last_name, contact.nickname, contact.email, company]
+      .filter(Boolean).join(' ').toLocaleLowerCase();
+    return terms.includes(query.trim().toLocaleLowerCase());
+  }).sort((a, b) => contactOptionLabel(a, companies).localeCompare(contactOptionLabel(b, companies), 'fr'));
+  return <div className="field contact-search-field"><span>{label}{required && <em className="required-mark"> *</em>}</span>
+    <input type="search" role="combobox" aria-expanded={open} aria-controls="contact-search-results" aria-autocomplete="list" value={open ? query : selected ? contactOptionLabel(selected, companies) : ''} placeholder={placeholder} required={required && !value} onFocus={() => { setQuery(''); setOpen(true); }} onChange={(event) => { setQuery(event.target.value); setOpen(true); if (value) onChange(''); }} onKeyDown={(event) => { if (event.key === 'Escape') { setOpen(false); setQuery(''); } if (event.key === 'Enter' && open && matching[0]) { event.preventDefault(); onChange(matching[0].id); setOpen(false); setQuery(''); } }} onBlur={() => { setOpen(false); setQuery(''); }} />
+    {open && <div className="contact-search-results" id="contact-search-results" role="listbox">{matching.slice(0, 100).map((contact) => <button type="button" role="option" aria-selected={contact.id === value} key={contact.id} onMouseDown={(event) => event.preventDefault()} onClick={() => { onChange(contact.id); setOpen(false); setQuery(''); }}>{contactOptionLabel(contact, companies)}</button>)}{!matching.length && <small>Aucun contact trouvé.</small>}</div>}
+  </div>;
 }
 
 function emptyExchangeProduct() {
@@ -374,7 +402,7 @@ function ServiceCatalogEditor({ service, history, contacts, onSave, onSavePrice,
         {service && <div className="service-billing-summary"><strong>Facturation</strong><span>Forfait · prix hors taxes</span><b>{service.default_price_ht == null ? 'Tarif à définir' : formatExchangeCurrency(service.default_price_ht)}</b><small>Le tarif pourra être ajusté sur chaque facture pro forma ou finale.</small></div>}
         <div className="form-actions"><button type="button" className="button button-quiet" disabled={saving} onClick={onClose}>Fermer</button><span className="form-actions-spacer" /><button type="submit" className="button button-primary" disabled={saving || !draft.name.trim() || !draft.internal_reference.trim()}>{saving ? 'Enregistrement…' : 'Enregistrer la fiche'}</button></div>
       </form>
-      {service && <aside className="service-price-history"><SectionLabel>Historique des prix</SectionLabel><p className="muted small">Les prix sont conservés en HT, au forfait, avec leur date d’effet et le contact concerné.</p><form className="service-price-form" onSubmit={savePrice}><Field label="Nouveau prix forfaitaire HT (€)" type="number" min="0" step="0.01" value={priceDraft.price_ht} onChange={(value) => setPriceDraft((current) => ({ ...current, price_ht: value }))} required /><div className="form-grid two-columns"><Field label="Date d’effet" type="date" value={priceDraft.effective_at} onChange={(value) => setPriceDraft((current) => ({ ...current, effective_at: value }))} required /><SelectField label="Contact associé" value={priceDraft.contact_id} onChange={(value) => setPriceDraft((current) => ({ ...current, contact_id: value }))} options={contacts.map((person) => [person.id, contactLabel(person)])} placeholder="Aucun contact" /></div><Field label="Note" value={priceDraft.note} onChange={(value) => setPriceDraft((current) => ({ ...current, note: value }))} placeholder="Ex. prix communiqué par Marta" /><button className="button button-quiet button-small" type="submit" disabled={savingPrice}>{savingPrice ? 'Enregistrement…' : 'Ajouter au tarif et à l’historique'}</button></form><div className="service-price-timeline">{history.length ? history.map((entry) => { const contact = contacts.find((person) => person.id === entry.contact_id); return <article key={entry.id}><strong>{formatExchangeCurrency(entry.price_ht)}</strong><span>{displayDate(entry.effective_at, false)}</span>{contact && <small>Contact · {contactLabel(contact)}</small>}{entry.note && <small>{entry.note}</small>}</article>; }) : <p className="muted small">Aucun historique de prix pour le moment.</p>}</div></aside>}
+      {service && <aside className="service-price-history"><SectionLabel>Historique des prix</SectionLabel><p className="muted small">Les prix sont conservés en HT, au forfait, avec leur date d’effet et le contact concerné.</p><form className="service-price-form" onSubmit={savePrice}><Field label="Nouveau prix forfaitaire HT (€)" type="number" min="0" step="0.01" value={priceDraft.price_ht} onChange={(value) => setPriceDraft((current) => ({ ...current, price_ht: value }))} required /><div className="form-grid two-columns"><Field label="Date d’effet" type="date" value={priceDraft.effective_at} onChange={(value) => setPriceDraft((current) => ({ ...current, effective_at: value }))} required /><SelectField label="Contact associé" value={priceDraft.contact_id} onChange={(value) => setPriceDraft((current) => ({ ...current, contact_id: value }))} options={contacts.map((person) => [person.id, contactOptionLabel(person, data.network_companies)])} placeholder="Aucun contact" /></div><Field label="Note" value={priceDraft.note} onChange={(value) => setPriceDraft((current) => ({ ...current, note: value }))} placeholder="Ex. prix communiqué par Marta" /><button className="button button-quiet button-small" type="submit" disabled={savingPrice}>{savingPrice ? 'Enregistrement…' : 'Ajouter au tarif et à l’historique'}</button></form><div className="service-price-timeline">{history.length ? history.map((entry) => { const contact = contacts.find((person) => person.id === entry.contact_id); return <article key={entry.id}><strong>{formatExchangeCurrency(entry.price_ht)}</strong><span>{displayDate(entry.effective_at, false)}</span>{contact && <small>Contact · {contactLabel(contact)}</small>}{entry.note && <small>{entry.note}</small>}</article>; }) : <p className="muted small">Aucun historique de prix pour le moment.</p>}</div></aside>}
     </div>
   </Modal>;
 }
@@ -803,7 +831,8 @@ export default function BusinessWorkspace({ mode, data, client, notify, onRefres
       const matchesFilter = actionFilter === 'all' || (actionFilter === 'open' && !['done', 'cancelled'].includes(action.status)) || (actionFilter === 'overdue' && groupId === 'overdue') || (actionFilter === 'done' && action.status === 'done');
       if (!matchesFilter) return false;
       const { exchange, exchangeCase, contact, products } = actionExchangeContext(action);
-      const haystack = [action.title, action.description, contact ? contactLabel(contact) : '', exchangeCase?.title, exchange?.content, ...products].join(' ').toLocaleLowerCase();
+      const company = contact ? data.network_companies.find((item) => item.id === contact.company_id)?.name : '';
+      const haystack = [action.title, action.description, contact?.first_name, contact?.last_name, contact?.nickname, company, contact?.email, exchangeCase?.title, exchange?.content, ...products].filter(Boolean).join(' ').toLocaleLowerCase();
       return haystack.includes(actionSearch.trim().toLocaleLowerCase());
     });
     return [groupId, label, visible];
@@ -1570,7 +1599,7 @@ export default function BusinessWorkspace({ mode, data, client, notify, onRefres
         <form className="record-form" onSubmit={saveExchange}>
           <fieldset className={`exchange-fields${exchangeFormMode === 'edit' ? ' exchange-fields-editing' : ''}`} disabled={exchangeFormMode === 'read' || saving}>
             {exchangeFormMode === 'edit' && <div className="edit-mode-notice">Mode modification — vos changements ne sont pas encore enregistrés.</div>}
-          <SelectField label="Contact" value={exchangeDraft.contact_id} onChange={(value) => setExchangeDraft((draft) => ({ ...draft, contact_id: value }))} options={data.network_contacts.map((person) => [person.id, contactLabel(person)])} placeholder="Choisir un contact" />
+          <SelectField label="Contact" value={exchangeDraft.contact_id} onChange={(value) => setExchangeDraft((draft) => ({ ...draft, contact_id: value }))} options={data.network_contacts.map((person) => [person.id, contactOptionLabel(person, data.network_companies)])} placeholder="Choisir un contact" />
           <div className="form-grid two-columns">
             <Field label="Date et heure" type="datetime-local" value={exchangeDraft.occurred_at} onChange={(value) => setExchangeDraft((draft) => ({ ...draft, occurred_at: value }))} required />
             <SelectField label="Direction" value={exchangeDraft.direction} onChange={(value) => setExchangeDraft((draft) => ({ ...draft, direction: value }))} options={ [['incoming', 'Entrant'], ['outgoing', 'Sortant']] } />
@@ -1748,7 +1777,7 @@ export default function BusinessWorkspace({ mode, data, client, notify, onRefres
           <div className="form-grid two-columns">
             <SelectField label="Type" value={documentDraft.document_type} onChange={(value) => setDocumentDraft((draft) => ({ ...draft, document_type: value }))} options={tradeDocumentTypes} />
             <SelectField label="Société émettrice" value={documentDraft.issuer_id} onChange={(value) => setDocumentDraft((draft) => ({ ...draft, issuer_id: value }))} options={data.business_issuers.map((issuer) => [issuer.id, issuer.legal_name])} placeholder="Choisir la société émettrice" required />
-            <SelectField label="Client / fournisseur" value={documentDraft.contact_id} onChange={(value) => setDocumentDraft((draft) => ({ ...draft, contact_id: value, case_id: '', exchange_id: '', related_document_id: '' }))} options={data.network_contacts.map((person) => [person.id, contactLabel(person)])} placeholder="Choisir un contact" required />
+            <SelectField label="Client / fournisseur" value={documentDraft.contact_id} onChange={(value) => setDocumentDraft((draft) => ({ ...draft, contact_id: value, case_id: '', exchange_id: '', related_document_id: '' }))} options={data.network_contacts.map((person) => [person.id, contactOptionLabel(person, data.network_companies)])} placeholder="Choisir un contact" required />
             <SelectField label="Dossier associé" value={documentDraft.case_id} onChange={(value) => setDocumentDraft((draft) => ({ ...draft, case_id: value, exchange_id: '' }))} options={documentCases.map((exchangeCase) => [exchangeCase.id, `${exchangeCase.title} · ${({ trade: 'Transaction', lead: 'Demande', open: 'Information' })[exchangeCase.category] || 'Dossier'}`])} placeholder="Aucun dossier" />
             <SelectField label="Destinataire" value={documentDraft.counterparty_role} onChange={(value) => setDocumentDraft((draft) => ({ ...draft, counterparty_role: value }))} options={ [['customer', 'Client — document émis'], ['supplier', 'Fournisseur — document reçu'], ['other', 'Autre interlocuteur']] } />
             <p className="muted small">Le numéro séquentiel est attribué quand le document passe à « Envoyé » ou « Accepté ». Un brouillon ne consomme pas de numéro.</p>
@@ -1800,7 +1829,7 @@ export default function BusinessWorkspace({ mode, data, client, notify, onRefres
           {actionRecordMode === 'edit' && <div className="edit-mode-notice">Modifie les informations, puis enregistre la fiche.</div>}
           <fieldset className="action-record-fields" disabled={actionRecordMode === 'read' || saving}>
             <div className="form-grid two-columns">
-              <SelectField label="Contact" value={actionDraft.contact_id} onChange={(contact_id) => setActionDraft((draft) => ({ ...draft, contact_id, exchange_id: data.crm_exchanges.some((exchange) => exchange.id === draft.exchange_id && exchange.contact_id === contact_id) ? draft.exchange_id : '' }))} options={data.network_contacts.map((contact) => [contact.id, contactLabel(contact)])} placeholder="Choisir un contact" required />
+              <ContactSearchField label="Contact" value={actionDraft.contact_id} onChange={(contact_id) => setActionDraft((draft) => ({ ...draft, contact_id, exchange_id: data.crm_exchanges.some((exchange) => exchange.id === draft.exchange_id && exchange.contact_id === contact_id) ? draft.exchange_id : '' }))} contacts={data.network_contacts} companies={data.network_companies} placeholder="Nom, pseudonyme ou société…" required />
               <SelectField label="Échange de référence" value={actionDraft.exchange_id} onChange={(exchange_id) => setActionDraft((draft) => ({ ...draft, exchange_id }))} options={data.crm_exchanges.filter((exchange) => exchange.contact_id === actionDraft.contact_id).sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at)).map((exchange) => [exchange.id, `${displayDate(exchange.occurred_at, false)} · ${exchangeScenarioValues(exchange.scenario).map((scenario) => scenario.replaceAll('_', ' ')).join(', ')}`])} placeholder="Choisir l’échange lié" required />
               <Field label="Titre de l’action" value={actionDraft.title} onChange={(title) => setActionDraft((draft) => ({ ...draft, title }))} required maxLength={180} />
               <Field label="Échéance" type="datetime-local" value={actionDraft.due_at} onChange={(due_at) => setActionDraft((draft) => ({ ...draft, due_at }))} />
@@ -1828,7 +1857,7 @@ export default function BusinessWorkspace({ mode, data, client, notify, onRefres
       {dialog === 'payment' && <Modal title="Enregistrer un paiement réel" onClose={() => setDialog('')}>
         <form className="record-form" onSubmit={savePayment}>
           <div className="form-grid two-columns">
-            <SelectField label="Contact" value={paymentDraft.contact_id} onChange={(value) => setPaymentDraft((draft) => ({ ...draft, contact_id: value, case_id: '', document_id: '', exchange_id: '' }))} options={data.network_contacts.map((person) => [person.id, contactLabel(person)])} placeholder="Choisir un contact" required />
+            <SelectField label="Contact" value={paymentDraft.contact_id} onChange={(value) => setPaymentDraft((draft) => ({ ...draft, contact_id: value, case_id: '', document_id: '', exchange_id: '' }))} options={data.network_contacts.map((person) => [person.id, contactOptionLabel(person, data.network_companies)])} placeholder="Choisir un contact" required />
             <SelectField label="Dossier associé" value={paymentDraft.case_id} onChange={(value) => setPaymentDraft((draft) => ({ ...draft, case_id: value, exchange_id: '' }))} options={data.crm_exchange_cases.filter((exchangeCase) => !paymentDraft.contact_id || exchangeCase.contact_id === paymentDraft.contact_id || (data.crm_exchange_case_contacts || []).some((link) => link.case_id === exchangeCase.id && link.contact_id === paymentDraft.contact_id)).map((exchangeCase) => [exchangeCase.id, exchangeCase.title])} placeholder="Aucun" />
             <SelectField label="Rôle du contact" value={paymentDraft.counterparty_role} onChange={(value) => setPaymentDraft((draft) => ({ ...draft, counterparty_role: value }))} options={ [['customer', 'Client'], ['supplier', 'Fournisseur'], ['other', 'Autre']] } />
             <SelectField label="Sens" value={paymentDraft.direction} onChange={(value) => setPaymentDraft((draft) => ({ ...draft, direction: value }))} options={ [['incoming', 'Entrant'], ['outgoing', 'Sortant']] } />
@@ -1849,7 +1878,7 @@ export default function BusinessWorkspace({ mode, data, client, notify, onRefres
             <Field label="Montant (€)" type="number" min="0" step="0.01" value={expenseDraft.amount} onChange={(value) => setExpenseDraft((draft) => ({ ...draft, amount: value }))} required />
             <Field label="Date" type="date" value={expenseDraft.expense_date} onChange={(value) => setExpenseDraft((draft) => ({ ...draft, expense_date: value }))} required />
             <Field label="Catégorie" value={expenseDraft.category} onChange={(value) => setExpenseDraft((draft) => ({ ...draft, category: value }))} required />
-             <SelectField label="Contact (facultatif)" value={expenseDraft.contact_id} onChange={(value) => setExpenseDraft((draft) => ({ ...draft, contact_id: value, case_id: '' }))} options={data.network_contacts.map((person) => [person.id, contactLabel(person)])} placeholder="Aucun" />
+             <SelectField label="Contact (facultatif)" value={expenseDraft.contact_id} onChange={(value) => setExpenseDraft((draft) => ({ ...draft, contact_id: value, case_id: '' }))} options={data.network_contacts.map((person) => [person.id, contactOptionLabel(person, data.network_companies)])} placeholder="Aucun" />
              <SelectField label="Dossier associé" value={expenseDraft.case_id} onChange={(value) => setExpenseDraft((draft) => ({ ...draft, case_id: value }))} options={data.crm_exchange_cases.filter((exchangeCase) => !expenseDraft.contact_id || exchangeCase.contact_id === expenseDraft.contact_id || (data.crm_exchange_case_contacts || []).some((link) => link.case_id === exchangeCase.id && link.contact_id === expenseDraft.contact_id)).map((exchangeCase) => [exchangeCase.id, exchangeCase.title])} placeholder="Aucun" />
             <SelectField label="Moyen de paiement" value={expenseDraft.payment_method} onChange={(value) => setExpenseDraft((draft) => ({ ...draft, payment_method: value }))} options={ [['', 'Non précisé'], ['cash', 'Espèces'], ['bank_transfer', 'Virement'], ['card', 'Carte bancaire']] } />
           </div>
