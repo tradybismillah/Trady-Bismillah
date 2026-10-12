@@ -82,15 +82,54 @@ export function scenarioForCaseKind(caseKind) {
   return caseKindScenario[caseKind] || 'open_discussion';
 }
 
-export function scenarioForActionType(actionType, caseKind = '') {
+export function scenarioForActionType(actionType, caseKind = '', category = '') {
   if (actionType === 'supplier_request' && caseKind === 'transport') return 'transport';
   if (actionType === 'supplier_request' && caseKind === 'product_search') return 'supplier_offer_received';
+  if (actionType === 'prepare_document') return caseKind === 'marketing' ? 'marketing_material' : category === 'trade' ? 'proforma_sent' : 'open_discussion';
   return ({
     supplier_request: 'price_request', customer_reply: 'open_discussion', send_offer: 'customer_offer_sent',
     send_listing: 'client_listing_request', verify_availability: 'availability_status',
-    prepare_document: 'proforma_sent', price_check: 'supplier_price_difference',
+    price_check: 'supplier_price_difference',
     market_research: 'sourcing', delivery_claim: 'delivery_claim',
   })[actionType] || 'open_discussion';
+}
+
+export function buildActionMessage(scenario, { recipient = '', products = [], context = '' } = {}) {
+  const hello = `Bonjour${recipient ? ` ${recipient}` : ''},`;
+  const productText = products.filter(Boolean).join(', ');
+  const subject = productText || context.trim() || 'votre demande';
+  const signoff = '\n\nMerci par avance pour votre retour.\nBien cordialement,';
+  if (['price_request', 'product_search_request', 'customer_product_request'].includes(scenario)) {
+    return `${hello}\n\nJe recherche ${subject}. Pouvez-vous me confirmer les références disponibles, les conditionnements, les quantités, votre prix unitaire et la date de disponibilité ?${signoff}`;
+  }
+  if (scenario === 'supplier_offer_received') {
+    return `${hello}\n\nJ’ai reçu une proposition concernant ${subject}. Je vérifie encore les conditions et la disponibilité avant de vous confirmer une offre adaptée. Votre besoin est-il toujours d’actualité ?${signoff}`;
+  }
+  if (scenario === 'supplier_catalog_received') {
+    return `${hello}\n\nMerci pour votre listing. Je vérifie les références, les conditionnements et les tarifs, puis je reviendrai vers vous si des précisions sont nécessaires.${signoff}`;
+  }
+  if (scenario === 'transport') {
+    return `${hello}\n\nPouvez-vous me communiquer votre tarif et vos disponibilités pour le transport suivant : ${context.trim() || subject} ? Merci de préciser vos dates possibles de chargement et les conditions de prise en charge.${signoff}`;
+  }
+  if (['availability_request', 'availability_status'].includes(scenario)) {
+    return `${hello}\n\nPouvez-vous me confirmer la disponibilité et la date prévue pour ${subject}, ainsi que les quantités concernées et les éventuels changements de délai ?${signoff}`;
+  }
+  if (['price_announced', 'offer_to_customers', 'customer_offer_sent', 'supplier_price_changed', 'availability_announced'].includes(scenario)) {
+    return `${hello}\n\nJe vous informe qu’une possibilité est à l’étude concernant ${subject}${context.trim() ? ` (${context.trim()})` : ''}. Si cela vous intéresse, indiquez-moi les quantités souhaitées afin que je vous confirme le prix, la disponibilité et les conditions.${signoff}`;
+  }
+  if (scenario === 'client_listing_request') {
+    return `${hello}\n\nJe prépare une sélection de produits adaptée à votre demande${context.trim() ? ` (${context.trim()})` : ''}. Je vous l’envoie dès qu’elle est prête. Avez-vous une marque, une quantité ou une gamme de prix à privilégier ?${signoff}`;
+  }
+  if (scenario === 'supplier_price_difference') {
+    return `${hello}\n\nJe souhaite actualiser votre offre pour ${subject}. Pouvez-vous me confirmer votre meilleur prix, le conditionnement, les quantités disponibles et la durée de validité du tarif ?${signoff}`;
+  }
+  if (scenario === 'delivery_claim') {
+    return `${hello}\n\nJe vous contacte au sujet d’un écart constaté à la livraison concernant ${subject}. Pouvez-vous vérifier le chargement et me transmettre les éléments disponibles afin que nous puissions régulariser la situation ?${signoff}`;
+  }
+  if (scenario === 'negotiation') {
+    return `${hello}\n\nJ’ai bien noté votre demande concernant ${subject}. Je vérifie les conditions possibles et reviens vers vous avec une réponse confirmée.${signoff}`;
+  }
+  return `${hello}\n\nJe reviens vers vous au sujet de ${subject}. Pouvez-vous me préciser votre besoin et les prochaines étapes souhaitées ?${signoff}`;
 }
 
 export function getExchangeWorkflow(scenario) {

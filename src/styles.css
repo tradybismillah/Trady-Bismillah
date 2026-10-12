@@ -1303,6 +1303,10 @@ h1, h2, h3, p { margin-top: 0; }
 .network-exchange-action > span { min-width: 0; overflow-wrap: anywhere; }
 .network-exchange-action small { color: #849086; }
 .network-exchange-action select { max-width: 130px; padding: 5px 7px; border: 1px solid #e1e7df; border-radius: 6px; background: #fff; color: #506053; font: inherit; font-size: 10px; }
+.network-exchange-action-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; }
+.network-action-message { margin-top: 6px; color: #43564a; }
+.network-action-message summary { color: #52705d; cursor: pointer; font-weight: 600; }
+.network-action-message p { margin: 6px 0; white-space: pre-wrap; line-height: 1.5; }
 .network-exchange-empty { display: grid; justify-items: center; gap: 7px; padding: 28px 16px; border: 1px dashed #dbe4d8; border-radius: 10px; color: #738076; text-align: center; }
 .network-exchange-empty > strong { color: #4d6252; font-size: 12px; }
 .network-exchange-empty p { max-width: 300px; margin: 0 0 5px; font-size: 11px; line-height: 1.5; }
