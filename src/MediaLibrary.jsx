@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { ArrowDownToLine, Check, Copy, FolderOpen, Images, ImagePlus, Search, Upload, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowDownToLine, Check, Copy, FolderOpen, Images, ImagePlus, Search, Upload, X, List, LayoutGrid, ArrowUpDown, FileText } from 'lucide-react';
 import ModalBackdrop from './ModalA11y.jsx';
 
 const defaultFolders = ['Produits', 'Marques', 'Fabricants', 'Contacts', 'Clients', 'Trade', 'Autres'];
@@ -25,7 +25,7 @@ function formatSize(size) {
 
 export function MediaPicker({ data, onSelect, onClose }) {
   const [search, setSearch] = useState('');
-  const entries = useMemo(() => data.media_assets.filter((asset) => asset.file_name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())), [data.media_assets, search]);
+  const entries = useMemo(() => data.media_assets.filter((asset) => String(asset.mime_type || '').startsWith('image/') && asset.file_name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())), [data.media_assets, search]);
   return <ModalBackdrop onClose={onClose}>
     <section className="modal-card modal-wide media-picker" role="dialog" aria-modal="true" aria-labelledby="media-picker-title">
       <div className="modal-heading"><div className="modal-heading-start"><span className="directory-modal-icon"><Images size={18} /></span><h2 id="media-picker-title">Choisir une image de la médiathèque</h2></div><button type="button" className="icon-button" onClick={onClose} aria-label="Fermer"><X size={17} /></button></div>
@@ -38,6 +38,10 @@ export function MediaPicker({ data, onSelect, onClose }) {
 export default function MediaLibrary({ data, client, onRefresh, notify }) {
   const [search, setSearch] = useState('');
   const [folder, setFolder] = useState('all');
+  const [mediaType, setMediaType] = useState('all');
+  const [sort, setSort] = useState('recent');
+  const [view, setView] = useState('grid');
+  const [visibleLimit, setVisibleLimit] = useState(60);
   const [uploadFolder, setUploadFolder] = useState('Produits');
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
@@ -47,8 +51,12 @@ export default function MediaLibrary({ data, client, onRefresh, notify }) {
   const visibleAssets = useMemo(() => data.media_assets.filter((asset) => {
     const matchesFolder = folder === 'all' || asset.folder === folder;
     const matchesSearch = `${asset.file_name} ${asset.folder}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase());
-    return matchesFolder && matchesSearch;
-  }), [data.media_assets, folder, search]);
+    const isImage = String(asset.mime_type || '').startsWith('image/');
+    const matchesType = mediaType === 'all' || (mediaType === 'images' && isImage) || (mediaType === 'documents' && !isImage);
+    return matchesFolder && matchesSearch && matchesType;
+  }).sort((a, b) => sort === 'name' ? String(a.file_name || '').localeCompare(String(b.file_name || ''), 'fr') : sort === 'size' ? Number(b.file_size || 0) - Number(a.file_size || 0) : new Date(b.created_at || 0) - new Date(a.created_at || 0)), [data.media_assets, folder, search, mediaType, sort]);
+  useEffect(() => setVisibleLimit(60), [folder, search, mediaType, sort]);
+  const displayedAssets = visibleAssets.slice(0, visibleLimit);
 
   const upload = async (event) => {
     const files = [...(event.target.files || [])];
@@ -115,8 +123,8 @@ export default function MediaLibrary({ data, client, onRefresh, notify }) {
 
     <div className="media-upload-panel"><div className="media-upload-copy"><span className="directory-modal-icon"><Upload size={18} /></span><div><strong>Importer des images</strong><span>JPEG, PNG, WebP, AVIF ou GIF · 20 Mo maximum par fichier</span></div></div><div className="media-upload-controls"><label className="field"><span>Dossier de destination</span><input value={uploadFolder} onChange={(event) => setUploadFolder(event.target.value)} list="media-folder-options" maxLength={60} /><datalist id="media-folder-options">{folders.map((item) => <option value={item} key={item} />)}</datalist></label><label className={`button button-primary media-file-button${uploading ? ' is-disabled' : ''}`}><Upload size={15} />{uploading ? `Importation ${uploadProgress}` : 'Choisir des images'}<input type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/gif" multiple disabled={uploading} onChange={upload} /></label></div></div>
 
-    <div className="media-library-tools"><label className="search-input"><Search size={16} /><input type="search" placeholder="Rechercher un fichier ou un dossier…" value={search} onChange={(event) => setSearch(event.target.value)} /></label><label className="field media-folder-filter"><span>Dossier</span><select value={folder} onChange={(event) => setFolder(event.target.value)}><option value="all">Tous les dossiers</option>{folders.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><span className="result-count">{visibleAssets.length} résultat{visibleAssets.length > 1 ? 's' : ''} sur {data.media_assets.length}</span></div>
+    <div className="media-library-tools"><label className="search-input"><Search size={16} /><input type="search" placeholder="Rechercher un fichier ou un dossier…" value={search} onChange={(event) => setSearch(event.target.value)} /></label><label className="field media-folder-filter"><span>Dossier</span><select value={folder} onChange={(event) => setFolder(event.target.value)}><option value="all">Tous les dossiers</option>{folders.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label className="field media-type-filter"><span>Type</span><select value={mediaType} onChange={(event) => setMediaType(event.target.value)}><option value="all">Tous les fichiers</option><option value="images">Images</option><option value="documents">Documents</option></select></label><label className="field media-sort-filter"><span>Trier par</span><select value={sort} onChange={(event) => setSort(event.target.value)}><option value="recent">Plus récents</option><option value="name">Nom A à Z</option><option value="size">Taille décroissante</option></select></label><div className="media-view-toggle" role="group" aria-label="Affichage"><button type="button" className={view === 'grid' ? 'is-active' : ''} onClick={() => setView('grid')} aria-label="Affichage en vignettes"><LayoutGrid size={16} /></button><button type="button" className={view === 'list' ? 'is-active' : ''} onClick={() => setView('list')} aria-label="Affichage en liste"><List size={16} /></button></div><span className="result-count">{visibleAssets.length} résultat{visibleAssets.length > 1 ? 's' : ''} sur {data.media_assets.length}</span></div>
 
-    {visibleAssets.length ? <div className="media-library-grid">{visibleAssets.map((asset) => <article className="media-library-card" key={asset.id}><div className="media-library-image">{imageUrl(data, asset.storage_path) ? <img src={imageUrl(data, asset.storage_path)} alt={asset.file_name} loading="lazy" /> : <ImagePlus size={25} />}</div><div className="media-library-card-body"><strong title={asset.file_name}>{asset.file_name}</strong><small><FolderOpen size={12} /> {asset.folder} · {formatSize(asset.file_size)}</small><div className="media-library-card-actions"><button type="button" className="button button-quiet button-small" onClick={() => copyPath(asset)}><Copy size={13} />{copiedId === asset.id ? 'Copié' : 'Chemin'}</button><label className="media-move-folder"><FolderOpen size={13} /><select aria-label={`Déplacer ${asset.file_name}`} value={asset.folder} disabled={movingId === asset.id} onChange={(event) => move(asset, event.target.value)}>{folders.map((item) => <option value={item} key={item}>{item}</option>)}</select></label></div></div></article>)}</div> : <div className="empty-state media-library-empty"><span className="empty-icon"><Images size={22} /></span><h2>{data.media_assets.length ? 'Aucune image trouvée' : 'La médiathèque est vide'}</h2><p>Importe des images pour les réutiliser dans les fiches produits, marques et fabricants.</p></div>}
+    {visibleAssets.length ? <><div className={view === 'grid' ? 'media-library-grid' : 'media-library-list'}>{displayedAssets.map((asset) => { const isImage = String(asset.mime_type || '').startsWith('image/'); const preview = isImage && imageUrl(data, asset.storage_path); return <article className={view === 'grid' ? 'media-library-card' : 'media-library-list-row'} key={asset.id}>{view === 'grid' ? <div className="media-library-image">{preview ? <img src={preview} alt={asset.file_name} loading="lazy" /> : <FileText size={25} />}</div> : <span className="media-library-list-preview">{preview ? <img src={preview} alt="" loading="lazy" /> : <FileText size={19} />}</span>}<div className="media-library-card-body"><strong title={asset.file_name}>{asset.file_name}</strong><small><FolderOpen size={12} /> {asset.folder} · {isImage ? 'Image' : 'Document'} · {formatSize(asset.file_size)}</small><div className="media-library-card-actions"><button type="button" className="button button-quiet button-small" onClick={() => copyPath(asset)}><Copy size={13} />{copiedId === asset.id ? 'Copié' : 'Chemin'}</button><label className="media-move-folder"><FolderOpen size={13} /><select aria-label={`Déplacer ${asset.file_name}`} value={asset.folder} disabled={movingId === asset.id} onChange={(event) => move(asset, event.target.value)}>{folders.map((item) => <option value={item} key={item}>{item}</option>)}</select></label></div></div></article>; })}</div>{displayedAssets.length < visibleAssets.length && <button type="button" className="button button-quiet media-load-more" onClick={() => setVisibleLimit((limit) => limit + 60)}>Afficher 60 fichiers de plus ({visibleAssets.length - displayedAssets.length} restants)</button>}</> : <div className="empty-state media-library-empty"><span className="empty-icon"><Images size={22} /></span><h2>{data.media_assets.length ? 'Aucun fichier trouvé' : 'La médiathèque est vide'}</h2><p>Importe des images et documents pour les réutiliser dans l’application.</p></div>}
   </section>;
 }
