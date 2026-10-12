@@ -3,6 +3,7 @@ import { AlertCircle, CalendarDays, Check, Clock3, FileDown, FileText, FolderOpe
 import Country from 'country-state-city/lib/country';
 import { exchangeProductRates, exchangeProductStoredRates, exchangeProductTotal, formatExchangeCurrency } from './lib/exchangePricing.js';
 import { exchangeScenarioValues, hasExchangeScenario } from './lib/exchangeScenarios.js';
+import { actionTypeOptions, getExchangeWorkflow, scenarioForActionType, suggestedActionDate } from './lib/exchangeWorkflows.js';
 import ModalBackdrop from './ModalA11y.jsx';
 import Tabs from './Tabs.jsx';
 
@@ -51,10 +52,26 @@ const exchangeScenarios = [
   ['open_discussion', 'Discussion ouverte', ''],
   ['hand_delivery', 'Remise en main propre', ''],
   ['other', 'Autre', ''],
+  ['supplier_offer_received', 'Offre reçue d’un fournisseur', 'Enregistrer l’offre fournisseur et la faire valider par le client'],
+  ['customer_offer_sent', 'Offre envoyée à un client', 'Relancer les clients intéressés sur l’offre envoyée'],
+  ['supplier_price_changed', 'Changement de prix fournisseur', 'Mettre à jour le prix source et prévenir les clients concernés'],
+  ['customer_product_request', 'Produit demandé par un client', 'Chercher le produit auprès des fournisseurs puis répondre au client'],
+  ['transport', 'Demande de transport', 'Demander aux transporteurs prix et dates de chargement'],
+  ['product_search_request', 'Recherche de produit', 'Interroger les fournisseurs sur le produit, le prix et la quantité'],
+  ['supplier_catalog_received', 'Listing fournisseur reçu', 'Vérifier le listing et valider les produits inconnus'],
+  ['client_listing_request', 'Listing demandé par un client', 'Envoyer le listing adapté au client'],
+  ['offer_to_customers', 'Offre à présenter aux clients', 'Présenter cette offre aux clients concernés'],
+  ['marketing_material', 'Document marketing à préparer', 'Préparer le document de présentation commerciale'],
+  ['availability_status', 'Suivi de disponibilité / livraison', 'Vérifier auprès du fournisseur puis répondre au client'],
+  ['supplier_price_difference', 'Écart de prix entre fournisseurs', 'Comparer les prix en interrogeant les sources séparément'],
+  ['sourcing', 'Recherche de fournisseur', 'Rechercher des fournisseurs et comparer les possibilités'],
+  ['storage', 'Recherche de stockage', 'Trouver une solution de stockage dans la zone demandée'],
+  ['delivery_claim', 'Avarie ou quantité manquante', 'Vérifier les écarts avec le fournisseur et le lieu de chargement'],
+  ['negotiation', 'Négociation de prix / disponibilité', 'Répondre à la négociation et relancer le client'],
 ];
 const scenariosByCategory = {
   trade: ['proforma_request', 'supplier_proforma_received', 'supplier_proforma_accepted', 'supplier_proforma_refused', 'supplier_invoice_received', 'proforma_change', 'proforma_sent', 'proforma_accepted', 'proforma_refused', 'final_invoice', 'credit_note', 'account_statement', 'hand_delivery', 'other'],
-  lead: ['price_request', 'availability_request', 'price_announced', 'availability_announced', 'open_discussion', 'other'],
+  lead: ['price_request', 'availability_request', 'price_announced', 'availability_announced', 'open_discussion', 'other', 'transport', 'product_search_request', 'supplier_catalog_received', 'client_listing_request', 'offer_to_customers', 'marketing_material', 'availability_status', 'supplier_price_difference', 'sourcing', 'storage', 'delivery_claim', 'negotiation', 'supplier_offer_received', 'customer_offer_sent', 'supplier_price_changed', 'customer_product_request'],
   open: ['market_information', 'contact_information', 'open_discussion', 'other'],
 };
 
@@ -130,7 +147,7 @@ function emptyCatalogService() {
 }
 
 function emptyActionRecord() {
-  return { id: '', contact_id: '', exchange_id: '', title: '', description: '', due_at: '', priority: 'normal', status: 'todo', assignee: '', result: '' };
+  return { id: '', contact_id: '', exchange_id: '', action_type: 'follow_up', title: '', description: '', due_at: '', priority: 'normal', status: 'todo', assignee: '', result: '' };
 }
 
 function localDateTimeValue(value) {
@@ -702,6 +719,9 @@ export default function BusinessWorkspace({ mode, data, client, notify, onRefres
   const [makeAction, setMakeAction] = useState(true);
   const [actionTitle, setActionTitle] = useState('');
   const [actionDue, setActionDue] = useState('');
+  const [actionType, setActionType] = useState('follow_up');
+  const [actionContactId, setActionContactId] = useState('');
+  const [actionPriority, setActionPriority] = useState('normal');
   const [actionFilter, setActionFilter] = useState('open');
   const [actionSearch, setActionSearch] = useState('');
   const [actionRecordMode, setActionRecordMode] = useState('read');
@@ -837,7 +857,17 @@ export default function BusinessWorkspace({ mode, data, client, notify, onRefres
     });
     return [groupId, label, visible];
   }).filter(([, , actions]) => actions.length), [actionGroups, actionFilter, actionSearch, data.crm_exchanges, data.crm_exchange_cases, data.crm_exchange_products, data.network_contacts, data.products]);
-  const suggestedTitle = exchangeScenarios.find(([value, , suggestion]) => exchangeDraft.scenario.includes(value) && suggestion)?.[2] || '';
+  const primaryScenario = exchangeDraft.scenario.find((scenario) => exchangeScenarios.some(([value, , suggestion]) => value === scenario && suggestion)) || exchangeDraft.scenario[0];
+  const selectedWorkflow = getExchangeWorkflow(primaryScenario);
+  const suggestedTitle = exchangeScenarios.find(([value, , suggestion]) => value === primaryScenario && suggestion)?.[2] || selectedWorkflow.title;
+  useEffect(() => {
+    if (dialog !== 'exchange' || exchangeFormMode !== 'create') return;
+    setActionTitle(selectedWorkflow.title);
+    setActionDue(suggestedActionDate(selectedWorkflow.days));
+    setActionType(selectedWorkflow.actionType);
+    setActionPriority(selectedWorkflow.priority || 'normal');
+    setActionContactId(exchangeDraft.contact_id || '');
+  }, [dialog, exchangeFormMode, primaryScenario]);
   const availabilityScenarioSelected = ['availability_request', 'availability_announced']
     .some((scenario) => hasExchangeScenario(exchangeDraft.scenario, scenario));
   const actionSuggestionAllowed = Boolean(suggestedTitle) && !['information', 'observation', 'alert'].includes(exchangeDraft.entry_kind);
@@ -898,6 +928,12 @@ export default function BusinessWorkspace({ mode, data, client, notify, onRefres
     setSelectedStorageTypes([]);
     setActionTitle('');
     setActionDue('');
+    const workflow = getExchangeWorkflow(exchangeDraft.scenario[0]);
+    setActionTitle(workflow.title);
+    setActionDue(suggestedActionDate(workflow.days));
+    setActionType(workflow.actionType);
+    setActionContactId(exchangeDraft.contact_id || '');
+    setActionPriority(workflow.priority || 'normal');
     setMakeAction(true);
     setDialog('exchange');
   };
@@ -951,7 +987,7 @@ export default function BusinessWorkspace({ mode, data, client, notify, onRefres
     setSaving(true);
     try {
       const action = actionSuggestionAllowed && makeAction && (actionTitle.trim() || suggestedTitle)
-        ? { title: (actionTitle.trim() || suggestedTitle), due_at: actionDue || null }
+        ? { title: (actionTitle.trim() || suggestedTitle), due_at: actionDue ? new Date(actionDue).toISOString() : null, action_type: actionType || selectedWorkflow.actionType, contact_id: actionContactId || exchangeDraft.contact_id, priority: actionPriority, description: selectedWorkflow.description || '' }
         : null;
       const exchange = {
         ...exchangeDraft,
@@ -993,8 +1029,9 @@ export default function BusinessWorkspace({ mode, data, client, notify, onRefres
           };
         }),
       };
-      const { error } = await client.rpc(exchangeFormMode === 'edit' ? 'update_crm_exchange_logistics' : 'save_crm_exchange_logistics', {
-        ...(exchangeFormMode === 'edit' ? { p_exchange_id: editingExchangeId } : {}),
+      const exchangeRpc = exchangeFormMode === 'edit' ? 'update_crm_exchange_logistics' : exchangeDraft.case_id ? 'add_crm_exchange_case_entry' : 'save_crm_exchange_logistics';
+      const { error } = await client.rpc(exchangeRpc, {
+        ...(exchangeFormMode === 'edit' ? { p_exchange_id: editingExchangeId } : exchangeDraft.case_id ? { p_case_id: exchangeDraft.case_id } : {}),
         p_exchange: exchange,
         p_product_ids: selectedProducts,
         p_service_ids: selectedServices,
@@ -1018,6 +1055,14 @@ export default function BusinessWorkspace({ mode, data, client, notify, onRefres
     const { error } = await client.from('crm_actions').update({ status, updated_at: new Date().toISOString() }).eq('id', action.id);
     if (error) notify(`Mise à jour de l’action impossible : ${error.message}`, true);
     else {
+      const source = data.crm_exchanges.find((item) => item.id === action.exchange_id);
+      const exchangeCase = data.crm_exchange_cases.find((item) => item.id === source?.case_id);
+      if (exchangeCase && status === 'waiting') {
+        const otherActive = data.crm_actions.some((item) => item.id !== action.id && data.crm_exchanges.find((event) => event.id === item.exchange_id)?.case_id === exchangeCase.id && !['waiting', 'done', 'cancelled'].includes(item.status));
+        if (!otherActive) await client.from('crm_exchange_cases').update({ status: 'waiting', updated_at: new Date().toISOString() }).eq('id', exchangeCase.id);
+      } else if (exchangeCase && ['todo', 'in_progress'].includes(status) && exchangeCase.status === 'waiting') {
+        await client.from('crm_exchange_cases').update({ status: 'in_progress', updated_at: new Date().toISOString() }).eq('id', exchangeCase.id);
+      }
       setActionDraft((current) => ({ ...current, status }));
       await onRefresh();
     }
@@ -1035,6 +1080,7 @@ export default function BusinessWorkspace({ mode, data, client, notify, onRefres
       const payload = {
         contact_id: actionDraft.contact_id,
         exchange_id: actionDraft.exchange_id,
+        action_type: actionDraft.action_type || 'follow_up',
         title: actionDraft.title.trim(),
         description: actionDraft.description.trim(),
         due_at: actionDraft.due_at ? new Date(actionDraft.due_at).toISOString() : null,
@@ -1451,7 +1497,7 @@ export default function BusinessWorkspace({ mode, data, client, notify, onRefres
             <div className="action-card-list">{actions.map((action) => {
               const { exchange, exchangeCase, contact, products } = actionExchangeContext(action);
               return <article className={`business-action-card${groupId === 'overdue' ? ' is-overdue' : ''}`} key={action.id}>
-                <div className="business-action-card-main"><div className="business-action-card-title"><span className={`action-priority-dot action-priority-${groupId}`} /><h3>{action.title}</h3></div>
+                <div className="business-action-card-main"><div className="business-action-card-title"><span className={`action-priority-dot action-priority-${groupId}`} /><h3><small>{actionTypeOptions.find(([value]) => value === action.action_type)?.[1] || 'Relance / suivi'} · </small>{action.title}</h3></div>
                   <div className="business-action-context"><strong>{exchangeCase?.title || 'Échange sans dossier'}</strong><span>{contact ? contactLabel(contact) : 'Contact'}{exchange?.occurred_at ? ` · échange du ${displayDate(exchange.occurred_at, false)}` : ''}</span></div>
                   {exchange?.content && <p className="business-action-source">« {exchange.content} »</p>}
                   {products.length > 0 && <div className="business-action-products">{products.slice(0, 4).map((product) => <span key={product}>{product}</span>)}{products.length > 4 && <small>+{products.length - 4}</small>}</div>}
@@ -1462,7 +1508,7 @@ export default function BusinessWorkspace({ mode, data, client, notify, onRefres
                   {action.status === 'done' && <button className="button button-primary button-small" type="button" onClick={() => {
                     const source = data.crm_exchanges.find((item) => item.id === action.exchange_id);
                     const now = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-                    setExchangeDraft({ ...emptyExchange, contact_id: action.contact_id, occurred_at: now, direction: 'outgoing', category: source?.category || 'trade', scenario: [action.title.toLowerCase().includes('pro-forma') ? 'proforma_sent' : 'other'] });
+                    setExchangeDraft({ ...emptyExchange, case_id: exchangeCase?.id || '', contact_id: action.contact_id, occurred_at: now, direction: 'outgoing', category: source?.category || 'trade', scenario: [scenarioForActionType(action.action_type, exchangeCase?.case_kind)] });
                     setExchangeFormMode('create'); setEditingExchangeId(null);
                     const linkedProducts = data.crm_exchange_products.filter((link) => link.exchange_id === action.exchange_id);
                     setExchangeProducts(linkedProducts.map((link) => link.product_id));
@@ -1599,7 +1645,7 @@ export default function BusinessWorkspace({ mode, data, client, notify, onRefres
         <form className="record-form" onSubmit={saveExchange}>
           <fieldset className={`exchange-fields${exchangeFormMode === 'edit' ? ' exchange-fields-editing' : ''}`} disabled={exchangeFormMode === 'read' || saving}>
             {exchangeFormMode === 'edit' && <div className="edit-mode-notice">Mode modification — vos changements ne sont pas encore enregistrés.</div>}
-          <SelectField label="Contact" value={exchangeDraft.contact_id} onChange={(value) => setExchangeDraft((draft) => ({ ...draft, contact_id: value }))} options={data.network_contacts.map((person) => [person.id, contactOptionLabel(person, data.network_companies)])} placeholder="Choisir un contact" />
+          <SelectField label="Contact" value={exchangeDraft.contact_id} onChange={(value) => { setActionContactId(value); setExchangeDraft((draft) => ({ ...draft, contact_id: value })); }} options={data.network_contacts.map((person) => [person.id, contactOptionLabel(person, data.network_companies)])} placeholder="Choisir un contact" />
           <div className="form-grid two-columns">
             <Field label="Date et heure" type="datetime-local" value={exchangeDraft.occurred_at} onChange={(value) => setExchangeDraft((draft) => ({ ...draft, occurred_at: value }))} required />
             <SelectField label="Direction" value={exchangeDraft.direction} onChange={(value) => setExchangeDraft((draft) => ({ ...draft, direction: value }))} options={ [['incoming', 'Entrant'], ['outgoing', 'Sortant']] } />
@@ -1627,7 +1673,7 @@ export default function BusinessWorkspace({ mode, data, client, notify, onRefres
                     onChange={() => setExchangeDraft((draft) => {
                       const scenarios = draft.scenario.includes(value)
                         ? draft.scenario.length > 1 ? draft.scenario.filter((scenario) => scenario !== value) : draft.scenario
-                        : [...draft.scenario, value];
+                        : [value, ...draft.scenario];
                       const keepsAvailability = scenarios.some((scenario) => ['availability_request', 'availability_announced'].includes(scenario));
                       return { ...draft, scenario: scenarios, availability_date: keepsAvailability ? draft.availability_date : '' };
                     })}
@@ -1757,7 +1803,7 @@ export default function BusinessWorkspace({ mode, data, client, notify, onRefres
             {!data.business_storage_types.some((type) => type.active) && <p className="muted small">Ajoutez des types dans la rubrique Services.</p>}
           </section>}
           <label className="field"><span>Compte rendu / information</span><textarea rows="4" value={exchangeDraft.content} onChange={(event) => setExchangeDraft((draft) => ({ ...draft, content: event.target.value }))} /></label>
-          {exchangeFormMode === 'create' && actionSuggestionAllowed && <div className="action-suggestion"><label><input type="checkbox" checked={makeAction} onChange={(event) => setMakeAction(event.target.checked)} /> Créer l’action proposée « {suggestedTitle} »</label>{makeAction && <div className="form-grid two-columns"><Field label="Action" value={actionTitle || suggestedTitle} onChange={setActionTitle} /><Field label="Échéance" type="datetime-local" value={actionDue} onChange={setActionDue} /></div>}</div>}
+          {exchangeFormMode === 'create' && actionSuggestionAllowed && <div className="action-suggestion"><label><input type="checkbox" checked={makeAction} onChange={(event) => setMakeAction(event.target.checked)} /> Créer l’action proposée « {suggestedTitle} »</label>{makeAction && <div className="form-grid two-columns"><SelectField label="Contact à solliciter" value={actionContactId || exchangeDraft.contact_id} onChange={setActionContactId} options={data.network_contacts.map((person) => [person.id, contactOptionLabel(person, data.network_companies)])} /><SelectField label="Type d’action" value={actionType || selectedWorkflow.actionType} onChange={setActionType} options={actionTypeOptions} /><Field label="Action" value={actionTitle || suggestedTitle} onChange={setActionTitle} /><Field label="Échéance proposée" type="datetime-local" value={actionDue} onChange={setActionDue} /><SelectField label="Priorité" value={actionPriority} onChange={setActionPriority} options={ [['low', 'Basse'], ['normal', 'Normale'], ['high', 'Haute']] } /></div>}</div>}
           {['information', 'observation', 'alert'].includes(exchangeDraft.entry_kind) && <p className="muted small">Ce contenu sera conservé dans le fil; aucune action n’est créée automatiquement.</p>}
           </fieldset>
           <div className="form-actions">
@@ -1828,9 +1874,10 @@ export default function BusinessWorkspace({ mode, data, client, notify, onRefres
         <form className="record-form" onSubmit={saveActionRecord}>
           {actionRecordMode === 'edit' && <div className="edit-mode-notice">Modifie les informations, puis enregistre la fiche.</div>}
           <fieldset className="action-record-fields" disabled={actionRecordMode === 'read' || saving}>
+            <div className="form-grid two-columns"><SelectField label="Type d’action" value={actionDraft.action_type || 'follow_up'} onChange={(action_type) => setActionDraft((draft) => ({ ...draft, action_type }))} options={actionTypeOptions} /></div>
             <div className="form-grid two-columns">
-              <ContactSearchField label="Contact" value={actionDraft.contact_id} onChange={(contact_id) => setActionDraft((draft) => ({ ...draft, contact_id, exchange_id: data.crm_exchanges.some((exchange) => exchange.id === draft.exchange_id && exchange.contact_id === contact_id) ? draft.exchange_id : '' }))} contacts={data.network_contacts} companies={data.network_companies} placeholder="Nom, pseudonyme ou société…" required />
-              <SelectField label="Échange de référence" value={actionDraft.exchange_id} onChange={(exchange_id) => setActionDraft((draft) => ({ ...draft, exchange_id }))} options={data.crm_exchanges.filter((exchange) => exchange.contact_id === actionDraft.contact_id).sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at)).map((exchange) => [exchange.id, `${displayDate(exchange.occurred_at, false)} · ${exchangeScenarioValues(exchange.scenario).map((scenario) => scenario.replaceAll('_', ' ')).join(', ')}`])} placeholder="Choisir l’échange lié" required />
+              <ContactSearchField label="Contact à solliciter" value={actionDraft.contact_id} onChange={(contact_id) => setActionDraft((draft) => ({ ...draft, contact_id, exchange_id: data.crm_exchanges.some((exchange) => exchange.id === draft.exchange_id) ? draft.exchange_id : '' }))} contacts={data.network_contacts} companies={data.network_companies} placeholder="Nom, pseudonyme ou société…" required />
+              <SelectField label="Échange de référence" value={actionDraft.exchange_id} onChange={(exchange_id) => setActionDraft((draft) => ({ ...draft, exchange_id }))} options={data.crm_exchanges.filter((exchange) => exchange.id === actionDraft.exchange_id || exchange.contact_id === actionDraft.contact_id).sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at)).map((exchange) => { const exchangeContact = data.network_contacts.find((person) => person.id === exchange.contact_id); return [exchange.id, `${contactLabel(exchangeContact || {})} · ${displayDate(exchange.occurred_at, false)} · ${exchangeScenarioValues(exchange.scenario).map((scenario) => scenario.replaceAll('_', ' ')).join(', ')}`]; })} placeholder="Choisir l’échange lié" required />
               <Field label="Titre de l’action" value={actionDraft.title} onChange={(title) => setActionDraft((draft) => ({ ...draft, title }))} required maxLength={180} />
               <Field label="Échéance" type="datetime-local" value={actionDraft.due_at} onChange={(due_at) => setActionDraft((draft) => ({ ...draft, due_at }))} />
               <SelectField label="Priorité" value={actionDraft.priority} onChange={(priority) => setActionDraft((draft) => ({ ...draft, priority }))} options={ [['low', 'Basse'], ['normal', 'Normale'], ['high', 'Haute']] } />

@@ -770,6 +770,7 @@ h1, h2, h3, p { margin-top: 0; }
 .business-action-card-main { display: grid; min-width: 0; align-content: start; gap: 8px; }
 .business-action-card-title { display: flex; align-items: center; gap: 9px; }
 .business-action-card-title h3 { margin: 0; color: #35493a; font-size: 13px; line-height: 1.4; }
+.business-action-card-title h3 small { display: block; color: #708074; font-size: 9px; font-weight: 700; text-transform: uppercase; }
 .action-priority-dot { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; background: #719b71; }
 .action-priority-overdue { background: #bd5e53; box-shadow: 0 0 0 3px #faeeec; }
 .action-priority-today { background: #d69a43; box-shadow: 0 0 0 3px #faf3e7; }
@@ -1253,6 +1254,8 @@ h1, h2, h3, p { margin-top: 0; }
 .network-exchange-direction.is-outgoing { background: #edf2f8; color: #526e8d; }
 .network-exchange-card-title { color: #4b6551; font-size: 11px; }
 .network-exchange-card-title span { color: #8a958b; }
+.network-exchange-scenario { width: fit-content; max-width: 100%; padding: 4px 8px; border: 1px solid #e0e9e1; border-radius: 999px; background: #f5f8f4; color: #536e59; font-size: 10px; font-weight: 700; }
+.network-exchange-action > span > small:first-child { display: block; color: #718075; font-size: 9px; }
 .network-exchange-card > p { margin: 0; color: #46554a; font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
 .network-exchange-event-products { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid #edf0eb; }
 .network-exchange-event-products > strong { color: #66766a; font-size: 10px; }
