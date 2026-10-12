@@ -22,6 +22,7 @@ const tradeStages = [
   ['client_offer', 'Proposition au client'], ['client_wait', 'En attente client'], ['confirmed', 'Opération confirmée'],
   ['documents', 'Documents'], ['delivery', 'Livraison'], ['claim', 'Litige / réclamation'], ['completed', 'Terminée'],
 ];
+const caseKindLabels = { transport: 'Transport', product_search: 'Recherche de produit', offer: 'Offre produit', supplier_catalog: 'Catalogue fournisseur', price_intel: 'Information de prix', client_listing: 'Demande de listing', availability: 'Disponibilité / livraison', sourcing: 'Recherche fournisseur', storage: 'Recherche de stockage', delivery_claim: 'Réclamation livraison', marketing: 'Présentation / marketing', negotiation: 'Négociation', other: 'Autre demande' };
 
 function issuerBrandProfile(issuer) {
   const name = (issuer?.legal_name || issuer?.name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();

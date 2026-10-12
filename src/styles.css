@@ -1156,6 +1156,7 @@ h1, h2, h3, p { margin-top: 0; }
 .network-detail-section .network-detail-grid { margin: 0; }
 .network-exchange-panel { display: grid; min-height: 0; grid-template-rows: auto minmax(0, 1fr); gap: 12px; }
 .network-exchange-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.network-exchange-heading-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
 .network-exchange-heading h3 { margin: 3px 0 0; color: #334b3b; font-size: 16px; }
 .network-exchange-heading p { margin: 4px 0 0; color: #758177; font-size: 11px; }
 .network-exchange-fab { flex: 0 0 auto; white-space: nowrap; }
@@ -1614,6 +1615,9 @@ h1, h2, h3, p { margin-top: 0; }
 .business-action-extra .business-action-source { margin-top: 0; }
 .business-action-extra .business-action-products { margin-bottom: 3px; }
 @media (max-width: 720px) {
+  .network-exchange-heading { align-items: stretch; flex-direction: column; }
+  .network-exchange-heading-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .network-exchange-heading-actions > .button { justify-content: center; white-space: nowrap; }
   .network-action-primary-fields { grid-template-columns: 1fr; }
   .network-exchange-form > .form-actions { bottom: -14px; margin-inline: -14px; padding-inline: 14px; }
 }
