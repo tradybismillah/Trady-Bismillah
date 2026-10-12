@@ -114,18 +114,30 @@ export default function ProductListingImport({ data, client, onRefresh, notify, 
       const code = cleanCell(cells[0]).replace(/[^a-z0-9]/gi, '');
       return /^[a-z0-9]{3,12}$/i.test(code) && cleanCell(cells[1]).length > 4 && cells.some((cell) => (priceCellValue(cell) || 0) > 0);
     });
-    if (tableRows.length >= 2) {
+    const unstructuredRows = lines.filter((line) => !line.includes('|')).map((line) => {
+      // OCR frequently drops vertical separators in dense supplier tables.
+      // Require an explicit currency marker so trailing palette quantities
+      // can never be mistaken for prices.
+      const match = line.match(/^\s*([a-z0-9][a-z0-9._/-]{2,14})\s+(.+?)\s+([0-9oOsS][0-9oOsS.,]*)\s*(?:€|¢|\$|£|EUR)/i);
+      if (!match || match[2].trim().length < 6) return null;
+      const price = priceCellValue(`${match[3]} €`);
+      if (!(price > 0)) return null;
+      const tailNumbers = line.slice(match.index + match[0].length).match(/\b\d{1,4}\b/g) || [];
+      return { code: match[1].replace(/[^a-z0-9]/gi, ''), designation: cleanCell(match[2]), pcb: '', palette: tailNumbers.at(-1) || '', price };
+    }).filter(Boolean);
+    const tableDataRows = tableRows.map((cells) => ({
+      code: cleanCell(cells[0]).replace(/[^a-z0-9]/gi, ''), designation: cleanCell(cells[1]),
+      pcb: cleanCell(cells[3] || ''), palette: cleanCell(cells.at(-1) || ''),
+      price: cells.map(priceCellValue).find((value) => value > 0) ?? '',
+    }));
+    const combinedRows = [...tableDataRows, ...unstructuredRows];
+    const uniqueRows = [...new Map(combinedRows.map((row) => [`${row.code.toLocaleLowerCase()}|${row.designation.toLocaleLowerCase()}`, row])).values()];
+    if (uniqueRows.length >= 2) {
       const outputHeaders = ['Référence fournisseur', 'Désignation', 'UVC par PCB', 'Colis par palette', 'Prix'];
-      const rows = tableRows.map((cells) => {
-        const priceCell = cells.map(priceCellValue).find((value) => value > 0) ?? '';
-        return {
-          [outputHeaders[0]]: cleanCell(cells[0]).replace(/[^a-z0-9]/gi, ''),
-          [outputHeaders[1]]: cleanCell(cells[1]),
-          [outputHeaders[2]]: cleanCell(cells[3] || ''),
-          [outputHeaders[3]]: cleanCell(cells.at(-1) || ''),
-          [outputHeaders[4]]: priceCell,
-        };
-      });
+      const rows = uniqueRows.map((row) => ({
+        [outputHeaders[0]]: row.code, [outputHeaders[1]]: row.designation,
+        [outputHeaders[2]]: row.pcb, [outputHeaders[3]]: row.palette, [outputHeaders[4]]: row.price,
+      }));
       return { headers: outputHeaders, rows };
     }
     const headerLine = lines.find((line) => /produit|designation|article|product/i.test(line) && /prix|price|ean|reference|ref/i.test(line));
