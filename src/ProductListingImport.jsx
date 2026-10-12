@@ -10,7 +10,7 @@ const fieldLabels = {
   quantity_pcb_palette: 'Colis par palette', source_price: 'Prix du listing',
 };
 const numberValue = (value) => {
-  let raw = String(value ?? '').trim().replace(/[\s€$£]/g, '');
+  let raw = String(value ?? '').trim().replace(/[\s€¢$£]/g, '');
   if (raw.includes(',') && raw.includes('.')) {
     raw = raw.lastIndexOf(',') > raw.lastIndexOf('.') ? raw.replace(/\./g, '').replace(',', '.') : raw.replace(/,/g, '');
   } else if (raw.includes(',')) raw = raw.replace(',', '.');
@@ -97,9 +97,40 @@ export default function ProductListingImport({ data, client, onRefresh, notify, 
 
   const rowsFromText = (text) => {
     const lines = text.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.length > 2);
+    const cleanCell = (cell) => String(cell || '').replace(/[\[\]_]/g, ' ').replace(/\s+/g, ' ').trim();
+    const priceCellValue = (cell) => {
+      const match = cleanCell(cell).match(/([0-9oOsS][0-9oOsS.,]*)\s*(?:€|¢|\$|£|EUR)/i);
+      if (!match) return null;
+      let value = match[1].replace(/[sS]/g, '5').replace(/[oO]/g, '0');
+      if (!/[,.]/.test(value)) {
+        const digits = value.replace(/\D/g, '');
+        if (digits.length === 3) value = `${digits.slice(0, -2)},${digits.slice(-2)}`;
+        else if (digits.length === 4) value = `${digits.slice(0, -3)},${digits.slice(-3)}`;
+      }
+      return numberValue(value);
+    };
+    const tableRows = lines.map((line) => line.includes('|') ? line.split('|').map(cleanCell) : null).filter((cells) => {
+      if (!cells || cells.length < 6) return false;
+      const code = cleanCell(cells[0]).replace(/[^a-z0-9]/gi, '');
+      return /^[a-z0-9]{3,12}$/i.test(code) && cleanCell(cells[1]).length > 4 && cells.some((cell) => (priceCellValue(cell) || 0) > 0);
+    });
+    if (tableRows.length >= 2) {
+      const outputHeaders = ['Référence fournisseur', 'Désignation', 'UVC par PCB', 'Colis par palette', 'Prix'];
+      const rows = tableRows.map((cells) => {
+        const priceCell = cells.map(priceCellValue).find((value) => value > 0) ?? '';
+        return {
+          [outputHeaders[0]]: cleanCell(cells[0]).replace(/[^a-z0-9]/gi, ''),
+          [outputHeaders[1]]: cleanCell(cells[1]),
+          [outputHeaders[2]]: cleanCell(cells[3] || ''),
+          [outputHeaders[3]]: cleanCell(cells.at(-1) || ''),
+          [outputHeaders[4]]: priceCell,
+        };
+      });
+      return { headers: outputHeaders, rows };
+    }
     const headerLine = lines.find((line) => /produit|designation|article|product/i.test(line) && /prix|price|ean|reference|ref/i.test(line));
     const parseLine = (line) => {
-      const cells = line.includes('\t') ? line.split('\t') : line.includes(';') ? line.split(';') : line.split(/\s{2,}/);
+      const cells = line.includes('\t') ? line.split('\t') : line.includes('|') ? line.split('|') : line.includes(';') ? line.split(';') : line.split(/\s{2,}/);
       if (cells.length > 1) return cells.map((cell) => cell.trim());
       const price = line.match(/(?:^|\s)(\d+[,.]\d{1,4})\s*(?:€|EUR)?\s*$/i);
       return price ? [line.slice(0, price.index).trim(), price[1]] : [line];
@@ -117,7 +148,18 @@ export default function ProductListingImport({ data, client, onRefresh, notify, 
       const { createWorker } = await import('tesseract.js');
       const worker = await createWorker('fra+eng');
       try {
-        const { data: result } = await worker.recognize(selectedFile);
+        await worker.setParameters({ tessedit_pageseg_mode: '6' });
+        const bitmap = await createImageBitmap(selectedFile);
+        const scale = Math.min(2.5, 3200 / bitmap.width, 3200 / bitmap.height);
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(bitmap.width * scale); canvas.height = Math.round(bitmap.height * scale);
+        const context = canvas.getContext('2d');
+        context.fillStyle = '#fff'; context.fillRect(0, 0, canvas.width, canvas.height);
+        context.filter = 'grayscale(1) contrast(1.2)';
+        context.imageSmoothingEnabled = true; context.imageSmoothingQuality = 'high';
+        context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        bitmap.close();
+        const { data: result } = await worker.recognize(canvas);
         return rowsFromText(result.text);
       } finally { await worker.terminate(); }
     }
@@ -145,6 +187,7 @@ export default function ProductListingImport({ data, client, onRefresh, notify, 
       const { createWorker } = await import('tesseract.js');
       const worker = await createWorker('fra+eng');
       try {
+        await worker.setParameters({ tessedit_pageseg_mode: '6' });
         const ocrLines = [];
         for (let pageNumber = 1; pageNumber <= Math.min(pdf.numPages, 5); pageNumber += 1) {
           const page = await pdf.getPage(pageNumber);
