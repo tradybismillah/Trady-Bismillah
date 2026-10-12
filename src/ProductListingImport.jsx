@@ -382,18 +382,25 @@ export default function ProductListingImport({ data, client, onRefresh, notify, 
     }
   };
 
-  const rejectRow = async (row) => {
-    const reason = window.prompt('Pourquoi cette ligne est-elle écartée ?');
-    if (reason === null) return;
-    const { error } = await client.from('product_import_rows').update({ status: 'rejected', review_note: reason.trim(), updated_at: new Date().toISOString() }).eq('id', row.id);
-    if (error) notify(`Écartement impossible : ${error.message}`, true);
-    else {
-      const { data: remaining } = await client.from('product_import_rows').select('status').eq('batch_id', row.batch_id);
+  const deleteRow = async (row) => {
+    setSaving(true);
+    try {
+      const { error } = await client.from('product_import_rows').delete().eq('id', row.id);
+      if (error) throw error;
+      const { data: remaining, error: remainingError } = await client.from('product_import_rows').select('status').eq('batch_id', row.batch_id);
+      if (remainingError) throw remainingError;
       const pending = (remaining || []).filter((item) => ['pending', 'matched'].includes(item.status)).length;
       const validated = (remaining || []).filter((item) => item.status === 'validated').length;
-      if (!pending) await client.from('product_import_batches').update({ status: 'completed', updated_at: new Date().toISOString() }).eq('id', row.batch_id);
-      else if (validated) await client.from('product_import_batches').update({ status: 'partial', updated_at: new Date().toISOString() }).eq('id', row.batch_id);
-      await onRefresh(); notify('Ligne écartée. Le fichier source reste conservé.');
+      const status = pending ? (validated ? 'partial' : 'review') : 'completed';
+      const { error: batchError } = await client.from('product_import_batches').update({ row_count: remaining?.length || 0, status, updated_at: new Date().toISOString() }).eq('id', row.batch_id);
+      if (batchError) throw batchError;
+      setRowDrafts((current) => { const next = { ...current }; delete next[row.id]; return next; });
+      await onRefresh();
+      notify('Ligne supprimée. Le fichier source reste conservé.');
+    } catch (error) {
+      notify(`Suppression impossible : ${error.message}`, true);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -419,7 +426,7 @@ export default function ProductListingImport({ data, client, onRefresh, notify, 
       {!allBatches.length ? <div className="empty-state"><FileSpreadsheet size={22} /><h3>Aucun listing importé</h3><p>Les fichiers importés apparaîtront ici pendant leur vérification et resteront consultables après validation.</p><button className="button button-primary" type="button" onClick={() => setTab('new')}>Importer un listing</button></div> : <>
         <div className="product-import-batch-bar"><label className="field"><span>Listing à consulter</span><select value={selectedBatch?.id || ''} onChange={(event) => { setSelectedBatchId(event.target.value); setRowDrafts({}); }}><option value="">Choisir une importation</option>{allBatches.map((batch) => { const contact = data.network_contacts.find((item) => item.id === batch.contact_id); return <option key={batch.id} value={batch.id}>{batch.file_name} · {displayContact(contact)} · {({ review: 'À vérifier', partial: 'Partiel', completed: 'Terminé', cancelled: 'Annulé' })[batch.status]}</option>; })}</select></label>{selectedBatch && <div className="product-import-batch-info"><strong>{remainingRows.length} ligne{remainingRows.length === 1 ? '' : 's'} à vérifier · {selectedBatch.row_count} au total</strong><span>{contactLabelForBatch(selectedBatch, data)} · {selectedBatch.source_location || 'Lieu non précisé'} · {selectedBatch.price_side === 'purchase' ? 'Côté achat' : 'Côté vente'}</span>{data.mediaUrls?.[selectedBatch.storage_path] && <a href={data.mediaUrls[selectedBatch.storage_path]} target="_blank" rel="noreferrer"><Link2 size={13} /> Ouvrir le fichier source</a>}</div>}</div>
         {selectedBatch && <><label className="search-input product-import-search"><Search size={15} /><input type="search" value={rowSearch} onChange={(event) => setRowSearch(event.target.value)} placeholder="Filtrer les lignes…" /></label>{batchRows.length > 0 && remainingRows.length === 0 && <div className="product-import-complete"><Check size={17} /> Toutes les lignes de cette importation ont été traitées.</div>}
-          {batchRows.filter((row) => row.status === 'validated' || row.status === 'rejected').length > 0 && <div className="product-import-processed">{batchRows.filter((row) => row.status === 'validated' || row.status === 'rejected').map((row) => <div key={row.id}><span className={row.status === 'validated' ? 'is-validated' : 'is-rejected'}>{row.status === 'validated' ? 'Validé' : 'Écarté'}</span><strong>{row.designation || `Ligne ${row.row_number}`}</strong>{row.product_id && <small>{data.products.find((product) => product.id === row.product_id)?.internal_reference}</small>}{row.review_note && <small>{row.review_note}</small>}</div>)}</div>}
+          {batchRows.filter((row) => row.status === 'validated').length > 0 && <div className="product-import-processed">{batchRows.filter((row) => row.status === 'validated').map((row) => <div key={row.id}><span className="is-validated">Validé</span><strong>{row.designation || `Ligne ${row.row_number}`}</strong>{row.product_id && <small>{data.products.find((product) => product.id === row.product_id)?.internal_reference}</small>}</div>)}</div>}
           <div className="product-import-rows">{filteredRows.map((row) => {
             const draft = rowDrafts[row.id] || row;
             const suggestion = productSuggestion(draft);
@@ -432,7 +439,7 @@ export default function ProductListingImport({ data, client, onRefresh, notify, 
               {(draft.brand_name && !brand || draft.manufacturer_name && !manufacturer || draft.category_name && !category) && <p className="product-import-review-hint">Certaines valeurs du fichier ne correspondent pas à tes référentiels. Rapproche-les ou complète ces références dans le catalogue avant validation.</p>}
               {draft.source_price != null && <small className="product-import-conversion">Prix ramené à l’UVC : {draft.source_price_basis === 'uvc' ? draft.source_price : draft.source_price_basis === 'pcb' && Number(draft.quantity_uvc_pcb) > 0 ? (draft.source_price / Number(draft.quantity_uvc_pcb)).toFixed(4) : draft.source_price_basis === 'palette' && Number(draft.quantity_uvc_pcb) * Number(draft.quantity_pcb_palette) > 0 ? (draft.source_price / (Number(draft.quantity_uvc_pcb) * Number(draft.quantity_pcb_palette))).toFixed(4) : 'quantités de conditionnement nécessaires'} {selectedBatch.currency} / UVC</small>}
               <details className="product-import-source-row"><summary>Voir la ligne d’origine</summary><pre>{JSON.stringify(row.raw_data, null, 2)}</pre></details>
-              <footer><button type="button" className="button button-quiet button-small" disabled={saving} onClick={() => updateRow(row, draft).then(() => { setRowDrafts((current) => { const next = { ...current }; delete next[row.id]; return next; }); onRefresh(); notify('Ligne enregistrée en attente.'); }).catch((error) => notify(`Enregistrement impossible : ${error.message}`, true))}>Enregistrer</button><button type="button" className="button button-danger-ghost button-small" disabled={saving} onClick={() => rejectRow(row)}>Écarter cette ligne</button><button type="button" className="button button-primary button-small" disabled={saving || !draft.designation?.trim()} onClick={() => validateRow(row)}><Check size={14} /> Valider la ligne</button></footer>
+              <footer><button type="button" className="button button-quiet button-small" disabled={saving} onClick={() => updateRow(row, draft).then(() => { setRowDrafts((current) => { const next = { ...current }; delete next[row.id]; return next; }); onRefresh(); notify('Ligne enregistrée en attente.'); }).catch((error) => notify(`Enregistrement impossible : ${error.message}`, true))}>Enregistrer</button><button type="button" className="button button-danger-ghost button-small" disabled={saving} onClick={() => deleteRow(row)}>Supprimer la ligne</button><button type="button" className="button button-primary button-small" disabled={saving || !draft.designation?.trim()} onClick={() => validateRow(row)}><Check size={14} /> Valider la ligne</button></footer>
             </article>;
           })}{!filteredRows.length && remainingRows.length > 0 && <p className="muted">Aucune ligne ne correspond au filtre.</p>}</div></>}
       </>}
