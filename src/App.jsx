@@ -5,15 +5,17 @@ import Country from 'country-state-city/lib/country';
 import UniversalMultiSelect from './UniversalMultiSelect.jsx';
 import { numberFromSource, parseTabularProducts, sourceSubunit } from './lib/productImport.js';
 import { exchangeProductStoredRates, exchangeProductTotal, formatExchangeCurrency } from './lib/exchangePricing.js';
+import { calculateProductPriceCote, pricePerPackaging } from './lib/productPriceCote.js';
 import { exchangeScenarioValues, hasExchangeScenario } from './lib/exchangeScenarios.js';
 import CatalogDirectory from './CatalogDirectories.jsx';
+import ProductListingImport from './ProductListingImport.jsx';
 import MediaLibrary, { MediaPicker } from './MediaLibrary.jsx';
 import NetworkWorkspace from './NetworkWorkspace.jsx';
 import ModalBackdrop from './ModalA11y.jsx';
 import Tabs from './Tabs.jsx';
 
 import {
-  ArrowDownToLine, ArrowLeft, ArrowRight, Building2, Check, ChevronDown, CircleHelp, ContactRound, Factory,
+  ArrowDownToLine, ArrowLeft, ArrowRight, Building2, Check, ChevronDown, CircleHelp, ContactRound, Factory, FileSpreadsheet,
   BriefcaseBusiness, CheckSquare, FileDown, FileText, Grid2X2, ImagePlus, Images, Leaf, List, LoaderCircle, LogOut, Menu, Package, Plus,
   Pencil, Search, Settings2, Share2, Tags, Trash2, Upload, X,
 } from 'lucide-react';
@@ -61,6 +63,7 @@ function ProductsSection({ data, loadData, onPdfExport, notify, supabase }) {
   const [selectedIds, setSelectedIds] = useState([]);
   const [editingPhotos, setEditingPhotos] = useState(null);
   const [openedProduct, setOpenedProduct] = useState(null);
+  const [showListingImport, setShowListingImport] = useState(false);
 
   const filteredProducts = data.products.filter(product => {
     const query = searchTerm.toLocaleLowerCase();
@@ -91,6 +94,7 @@ function ProductsSection({ data, loadData, onPdfExport, notify, supabase }) {
             <button type="button" className={`button button-small ${layout === 'cards' ? 'button-primary' : 'button-quiet'}`} onClick={() => setLayout('cards')} aria-pressed={layout === 'cards'}><Grid2X2 size={15} /> Cartes</button>
           </div>
           <button className="button button-quiet" type="button" onClick={() => loadData()}><LoaderCircle size={16} /> Actualiser</button>
+          <button className="button button-quiet" type="button" onClick={() => setShowListingImport(true)}><FileSpreadsheet size={16} /> Importer un listing</button>
         </div>
       </div>
 
@@ -108,7 +112,8 @@ function ProductsSection({ data, loadData, onPdfExport, notify, supabase }) {
 
       {filteredProducts.length === 0 ? <div className="empty-state"><Package size={22} /><h2>Aucun produit trouvé</h2><p>Modifie la recherche ou les filtres pour afficher des produits.</p></div> : layout === 'table' ? <div className="product-table-scroll"><table className="product-table"><thead><tr>{selectionMode && <th><input type="checkbox" aria-label="Sélectionner les résultats visibles" checked={allSelected} onChange={toggleVisible} /></th>}<th>Photo</th><th>Référence</th><th>Produit</th><th>Marque</th><th>Fabricant</th><th>Catégorie</th><th>Origine</th><th>Actions</th></tr></thead><tbody>{filteredProducts.map((product) => <tr key={product.id}>{selectionMode && <td><input type="checkbox" aria-label={`Sélectionner ${product.designation}`} checked={selectedIds.includes(product.id)} onChange={() => toggleProduct(product.id)} /></td>}<td>{imageFor(product.main_photo_url) ? <img className="catalogue-thumb" src={imageFor(product.main_photo_url)} alt={`Photo de ${product.designation}`} /> : <span className="catalogue-thumb catalogue-thumb-empty"><ImagePlus size={16} /></span>}</td><td>{product.internal_reference || '—'}</td><td><button type="button" className="table-product-link" onClick={() => setOpenedProduct(product)}>{product.designation || 'Produit sans nom'}</button><small className="directory-description">EAN : {product.ean_gtin || '—'}</small></td><td>{brandName(product)}</td><td>{manufacturerName(product)}</td><td>{categoryName(product)}</td><td>{product.product_origin || '—'}</td><td><div className="product-table-actions"><button type="button" className="icon-button" title="Gérer les photos" aria-label={`Gérer les photos de ${product.designation}`} onClick={() => setEditingPhotos(product)}><ImagePlus size={16} /></button><button type="button" className="icon-button" title={`Exporter ${product.designation} en PDF`} aria-label={`Exporter ${product.designation} en PDF`} onClick={() => onPdfExport([product], false)}><FileDown size={16} /></button></div></td></tr>)}</tbody></table></div> : <div className="record-grid">{filteredProducts.map((product) => <article className="record-card directory-card" key={product.id}>{imageFor(product.main_photo_url) ? <img className="record-thumb" src={imageFor(product.main_photo_url)} alt={`Photo de ${product.designation}`} /> : <span className="record-thumb record-thumb-empty"><ImagePlus size={18} /></span>}{selectionMode && <button type="button" className={`pdf-card-select${selectedIds.includes(product.id) ? ' pdf-card-select-active' : ''}`} aria-label={`${selectedIds.includes(product.id) ? 'Désélectionner' : 'Sélectionner'} ${product.designation}`} aria-pressed={selectedIds.includes(product.id)} onClick={() => toggleProduct(product.id)}>{selectedIds.includes(product.id) && <Check size={15} />}</button>}<div className="record-card-body"><span className="reference-label">{product.internal_reference || 'SANS RÉFÉRENCE'}</span><h3><button type="button" className="product-name-button" onClick={() => setOpenedProduct(product)}>{product.designation || 'Produit sans nom'}</button></h3><p>{brandName(product)} · {manufacturerName(product)}</p><div className="card-meta"><span>{categoryName(product)}</span><span>{product.product_origin || 'Origine non précisée'}</span></div></div>{!selectionMode && <div className="product-card-actions"><button type="button" className="product-pdf-button" title="Gérer les photos" aria-label={`Gérer les photos de ${product.designation}`} onClick={() => setEditingPhotos(product)}><ImagePlus size={16} /></button><button type="button" className="product-pdf-button" title="Exporter en PDF" aria-label={`Exporter ${product.designation} en PDF`} onClick={() => onPdfExport([product], false)}><FileDown size={16} /></button></div>}</article>)}</div>}
       {editingPhotos && <ProductPhotoEditor product={editingPhotos} data={data} client={supabase} onClose={() => setEditingPhotos(null)} onRefresh={loadData} notify={notify} />}
-      {openedProduct && <ProductRecord product={openedProduct} data={data} onClose={() => setOpenedProduct(null)} onPhotos={() => { setEditingPhotos(openedProduct); setOpenedProduct(null); }} onPdf={() => onPdfExport([openedProduct], false)} />}
+      {openedProduct && <ProductRecord product={openedProduct} data={data} client={supabase} onRefresh={loadData} notify={notify} onClose={() => setOpenedProduct(null)} onPhotos={() => { setEditingPhotos(openedProduct); setOpenedProduct(null); }} onPdf={() => onPdfExport([openedProduct], false)} />}
+      {showListingImport && <ProductListingImport data={data} client={supabase} onRefresh={loadData} notify={notify} onClose={() => setShowListingImport(false)} />}
     </div>
   );
 }
@@ -120,7 +125,7 @@ const productPhotoFields = [
   ['palette_photo_url', 'Photo palette'],
 ];
 
-function ProductRecord({ product, data, onClose, onPhotos, onPdf }) {
+function ProductRecord({ product, data, client, onRefresh, notify, onClose, onPhotos, onPdf }) {
   const [tab, setTab] = useState('Infos');
   const brand = data.brands.find((row) => row.id === product.brand_id);
   const manufacturer = data.manufacturers.find((row) => row.id === product.manufacturer_id);
@@ -134,6 +139,7 @@ function ProductRecord({ product, data, onClose, onPhotos, onPdf }) {
     return `${exchange.scenario || ''} ${exchange.subscenario || ''}`.toLocaleLowerCase().includes('disponib') || ['availability', 'offer'].includes(exchangeCase?.case_kind);
   });
   const prices = linked.filter(({ row }) => row.uvc_unit_price != null || row.pcb_unit_price != null || row.palette_unit_price != null);
+  const observations = (data.product_price_observations || []).filter((item) => item.product_id === product.id).sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at));
   const image = data.mediaUrls?.[product.main_photo_url] || '';
   const infoGroups = [
     ['Identification', [['Référence interne', product.internal_reference], ['EAN / GTIN', product.ean_gtin], ['Catégorie', category?.name], ['Origine', product.product_origin]]],
@@ -147,10 +153,73 @@ function ProductRecord({ product, data, onClose, onPhotos, onPdf }) {
   const visibleInfoGroups = infoGroups.map(([heading, fields]) => [heading, fields.filter(([, value]) => value != null && String(value).trim() !== '')]).filter(([heading, fields]) => heading === 'Identification' || fields.length);
   return <ModalBackdrop onClose={onClose}><section className="modal-card modal-wide product-record-modal" role="dialog" aria-modal="true" aria-labelledby="product-record-title">
     <div className="product-record-hero"><button type="button" className="icon-button product-record-close" onClick={onClose} aria-label="Fermer"><X size={17} /></button><div className="product-record-image">{image ? <img src={image} alt={`Photo de ${product.designation}`} /> : <Package size={30} />}</div><div className="product-record-summary"><span className="reference-label">FICHE PRODUIT · {category?.name || 'CATÉGORIE NON RENSEIGNÉE'}</span><h2 id="product-record-title">{product.designation || 'Produit sans nom'}</h2><div className="product-record-tags">{brand?.name && <span>{brand.name}</span>}{manufacturer?.legal_name && <span>{manufacturer.legal_name}</span>}{product.product_origin && <span>{product.product_origin}</span>}</div><div className="product-record-codes"><span><small>Référence</small><strong>{product.internal_reference || '—'}</strong></span><span><small>EAN / GTIN</small><strong>{product.ean_gtin || '—'}</strong></span></div></div><div className="product-record-hero-actions"><button type="button" className="button button-quiet button-small" onClick={onPhotos}><ImagePlus size={15} /> Gérer les photos</button><button type="button" className="button button-primary button-small" onClick={onPdf}><FileDown size={15} /> Exporter en PDF</button></div></div>
-    <Tabs className="product-detail-tabs" activeClassName="product-detail-tab-active" label="Sections de la fiche produit" value={tab} onChange={setTab} tabs={[{ value: 'Infos', label: 'Caractéristiques' }, { value: 'Prix', label: `Historique des prix · ${prices.length}` }, { value: 'Disponibilité', label: `Disponibilités · ${availability.length}` }]} />
-    {tab === 'Infos' ? <div className="product-record-info">{visibleInfoGroups.length ? visibleInfoGroups.map(([heading, fields]) => <section className={`product-record-info-group${heading === 'Identification' ? ' is-identification' : ''}`} key={heading}><h3>{heading}</h3>{heading === 'Identification' && <div className="product-record-entities">{[["Marque", brand?.name, brandLogo], ["Fabricant", manufacturer?.legal_name, manufacturerLogo]].map(([label, name, logo]) => <article className="product-record-entity-card" key={label}><div className="product-record-entity-logo">{logo ? <img src={logo} alt={`Logo ${label.toLowerCase()} ${name || ''}`} /> : <span aria-hidden="true">{name?.trim()?.charAt(0)?.toLocaleUpperCase() || '—'}</span>}</div><div className="product-record-entity-copy"><small>{label}</small><strong>{name || `${label} non renseigné${label === 'Marque' ? 'e' : ''}`}</strong></div></article>)}</div>}{fields.length > 0 && <div className="network-detail-grid">{fields.map(([label, value]) => <div className="network-detail-item" key={label}><small>{label}</small><strong>{value}</strong></div>)}</div>}</section>) : <p className="product-history-empty">Aucune caractéristique n’a encore été renseignée.</p>}</div> : <div className="product-history-panel">{(tab === 'Prix' ? prices : availability).length ? (tab === 'Prix' ? prices : availability).map(eventCard) : <p className="product-history-empty">Aucune annonce de {tab === 'Prix' ? 'prix' : 'disponibilité'} liée à ce produit.</p>}</div>}
+    <Tabs className="product-detail-tabs" activeClassName="product-detail-tab-active" label="Sections de la fiche produit" value={tab} onChange={setTab} tabs={[{ value: 'Infos', label: 'Caractéristiques' }, { value: 'Prix', label: `Cote et historique · ${observations.length + prices.length}` }, { value: 'Disponibilité', label: `Disponibilités · ${availability.length}` }]} />
+    {tab === 'Infos' ? <div className="product-record-info">{visibleInfoGroups.length ? visibleInfoGroups.map(([heading, fields]) => <section className={`product-record-info-group${heading === 'Identification' ? ' is-identification' : ''}`} key={heading}><h3>{heading}</h3>{heading === 'Identification' && <div className="product-record-entities">{[["Marque", brand?.name, brandLogo], ["Fabricant", manufacturer?.legal_name, manufacturerLogo]].map(([label, name, logo]) => <article className="product-record-entity-card" key={label}><div className="product-record-entity-logo">{logo ? <img src={logo} alt={`Logo ${label.toLowerCase()} ${name || ''}`} /> : <span aria-hidden="true">{name?.trim()?.charAt(0)?.toLocaleUpperCase() || '—'}</span>}</div><div className="product-record-entity-copy"><small>{label}</small><strong>{name || `${label} non renseigné${label === 'Marque' ? 'e' : ''}`}</strong></div></article>)}</div>}{fields.length > 0 && <div className="network-detail-grid">{fields.map(([label, value]) => <div className="network-detail-item" key={label}><small>{label}</small><strong>{value}</strong></div>)}</div>}</section>) : <p className="product-history-empty">Aucune caractéristique n’a encore été renseignée.</p>}</div> : tab === 'Prix' ? <ProductPricePanel product={product} observations={observations} legacyPrices={prices} data={data} client={client} onRefresh={onRefresh} notify={notify} /> : <div className="product-history-panel">{availability.length ? availability.map(eventCard) : <p className="product-history-empty">Aucune annonce de disponibilité liée à ce produit.</p>}</div>}
     <div className="product-record-footer"><span>Fiche produit · {product.internal_reference || product.designation}</span><button type="button" className="button button-quiet button-small" onClick={onClose}>Fermer</button></div>
   </section></ModalBackdrop>;
+}
+
+function ProductPricePanel({ product, observations, legacyPrices, data, client, onRefresh, notify }) {
+  const [showForm, setShowForm] = useState(false);
+  const [filterSide, setFilterSide] = useState('all');
+  const [saving, setSaving] = useState(false);
+  const [draft, setDraft] = useState({ price_type: 'observed', side: 'purchase', contact_id: '', exchange_id: '', amount_per_uvc: '', currency: 'EUR', eur_per_currency_unit: '1', occurred_at: new Date().toISOString().slice(0, 10), valid_until: '', source_location: '', source_note: '', source_url: '', confidence: '3' });
+  const formatter = (value, currency = 'EUR') => value == null ? '—' : new Intl.NumberFormat('fr-FR', { style: 'currency', currency }).format(Number(value));
+  const buyCote = calculateProductPriceCote(observations, 'purchase');
+  const sellCote = calculateProductPriceCote(observations, 'sale');
+  const uvcPerPalette = product.quantity_uvc_palette || (Number(product.quantity_uvc_pcb) * Number(product.quantity_pcb_palette));
+  const formatCoteCard = (label, cote) => <article className="product-price-cote-card"><span>{label}</span><strong>{formatter(cote.value)} <small>/ UVC</small></strong><div className="product-price-cote-derived"><span>PCB <b>{formatter(pricePerPackaging(cote.value, product.quantity_uvc_pcb))}</b></span><span>Palette <b>{formatter(pricePerPackaging(cote.value, uvcPerPalette))}</b></span></div><small>Fiabilité {cote.confidence.toLocaleLowerCase()} · {cote.count} prix · {cote.types.traded} transaction{cote.types.traded === 1 ? '' : 's'} · {cote.suppliers} source{cote.suppliers === 1 ? '' : 's'}</small>{cote.low != null && cote.high != null && <small>Zone centrale indicative : {formatter(cote.low)} à {formatter(cote.high)} / UVC</small>}</article>;
+  const contacts = data.network_contacts || [];
+  const exchanges = contacts.length ? data.crm_exchanges.filter((exchange) => exchange.contact_id === draft.contact_id).sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at)) : [];
+  const saveObservation = async (event) => {
+    event.preventDefault();
+    if (!draft.amount_per_uvc || Number(draft.amount_per_uvc) < 0) return;
+    if (draft.price_type === 'traded' && !draft.source_note.trim()) {
+      notify('Ajoute la référence de facture ou de transaction pour confirmer ce prix réalisé.', true);
+      return;
+    }
+    setSaving(true);
+    try {
+      const rate = draft.currency === 'EUR' ? 1 : Number(draft.eur_per_currency_unit) || null;
+      const { error } = await client.from('product_price_observations').insert({
+        product_id: product.id, contact_id: draft.contact_id || null, exchange_id: draft.exchange_id || null,
+        price_type: draft.price_type, side: draft.side, amount_per_uvc: Number(draft.amount_per_uvc), currency: draft.currency,
+        eur_per_uvc: rate ? Number(draft.amount_per_uvc) * rate : null, eur_per_currency_unit: rate,
+        occurred_at: draft.occurred_at, valid_until: draft.valid_until || null, source_location: draft.source_location.trim(),
+        source_note: draft.source_note.trim(), source_url: draft.source_url.trim(), confidence: Number(draft.confidence),
+        uvc_per_pcb_snapshot: product.quantity_uvc_pcb || null, uvc_per_palette_snapshot: uvcPerPalette || null, status: 'validated',
+      });
+      if (error) throw error;
+      await onRefresh();
+      setShowForm(false);
+      setDraft((current) => ({ ...current, amount_per_uvc: '', source_note: '', source_url: '', exchange_id: '' }));
+      notify('Prix ajouté à l’historique du produit.');
+    } catch (error) {
+      notify(`Enregistrement du prix impossible : ${error.message}`, true);
+    } finally {
+      setSaving(false);
+    }
+  };
+  const visible = observations.filter((item) => filterSide === 'all' || item.side === filterSide);
+  const supplierLatest = new Map();
+  for (const item of visible) {
+    const key = `${item.side}:${item.contact_id || item.source_note}:${item.source_location}`;
+    if (!supplierLatest.has(key)) supplierLatest.set(key, item);
+  }
+  const contactLabel = (id) => {
+    const contact = contacts.find((item) => item.id === id);
+    if (!contact) return 'Source non renseignée';
+    const company = data.network_companies.find((item) => item.id === contact.company_id)?.name;
+    return `${contact.nickname || [contact.first_name, contact.last_name].filter(Boolean).join(' ') || contact.email || 'Contact'}${company ? ` · ${company}` : ''}`;
+  };
+  return <div className="product-price-panel">
+    <div className="product-price-cote-grid">{formatCoteCard('COTE INDICATIVE · ACHAT', buyCote)}{formatCoteCard('COTE INDICATIVE · VENTE', sellCote)}</div>
+    <p className="product-price-cote-note">La cote est une médiane pondérée, pas un prix définitif. Les transactions confirmées pèsent le plus, puis les prix annoncés et les prix relevés. Une cote n’est affichée que pour les montants comparables ramenés en EUR par UVC.</p>
+    <div className="product-price-toolbar"><div><h3>Sources et historique des prix</h3><p>{observations.length} relevé{observations.length === 1 ? '' : 's'} validé{observations.length === 1 ? '' : 's'} conservé{observations.length === 1 ? '' : 's'}</p></div><div><select aria-label="Filtrer l’historique par côté" value={filterSide} onChange={(event) => setFilterSide(event.target.value)}><option value="all">Achats et ventes</option><option value="purchase">Prix d’achat</option><option value="sale">Prix de vente</option></select><button type="button" className="button button-primary button-small" onClick={() => setShowForm((current) => !current)}><Plus size={14} /> Ajouter un prix</button></div></div>
+    {showForm && <form className="product-price-entry-form" onSubmit={saveObservation}><div className="form-grid two-columns"><label className="field"><span>Nature du prix</span><select value={draft.price_type} onChange={(event) => setDraft((current) => ({ ...current, price_type: event.target.value }))}><option value="traded">Transaction réalisée</option><option value="announced">Prix annoncé</option><option value="observed">Prix relevé</option></select></label><label className="field"><span>Côté</span><select value={draft.side} onChange={(event) => setDraft((current) => ({ ...current, side: event.target.value }))}><option value="purchase">Achat</option><option value="sale">Vente</option></select></label><label className="field"><span>Contact ou source</span><select value={draft.contact_id} onChange={(event) => setDraft((current) => ({ ...current, contact_id: event.target.value, exchange_id: '' }))}><option value="">Source externe / non identifiée</option>{contacts.map((contact) => <option key={contact.id} value={contact.id}>{contactLabel(contact.id)}</option>)}</select></label><label className="field"><span>Échange lié</span><select value={draft.exchange_id} onChange={(event) => setDraft((current) => ({ ...current, exchange_id: event.target.value }))} disabled={!draft.contact_id}><option value="">Aucun échange</option>{exchanges.map((exchange) => <option key={exchange.id} value={exchange.id}>{new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium' }).format(new Date(exchange.occurred_at))} · {exchange.content.slice(0, 55) || 'Échange'}</option>)}</select></label><label className="field"><span>Prix par UVC *</span><input required type="number" min="0" step="any" value={draft.amount_per_uvc} onChange={(event) => setDraft((current) => ({ ...current, amount_per_uvc: event.target.value }))} /></label><label className="field"><span>Devise</span><select value={draft.currency} onChange={(event) => setDraft((current) => ({ ...current, currency: event.target.value, eur_per_currency_unit: event.target.value === 'EUR' ? '1' : '' }))}>{['EUR', 'USD', 'GBP', 'DZD', 'MAD', 'CHF'].map((code) => <option key={code}>{code}</option>)}</select></label>{draft.currency !== 'EUR' && <label className="field"><span>1 {draft.currency} en EUR (facultatif)</span><input type="number" min="0.000001" step="any" value={draft.eur_per_currency_unit} onChange={(event) => setDraft((current) => ({ ...current, eur_per_currency_unit: event.target.value }))} /></label>}<label className="field"><span>Date du prix</span><input required type="date" value={draft.occurred_at} onChange={(event) => setDraft((current) => ({ ...current, occurred_at: event.target.value }))} /></label><label className="field"><span>Fin de validité</span><input type="date" min={draft.occurred_at} value={draft.valid_until} onChange={(event) => setDraft((current) => ({ ...current, valid_until: event.target.value }))} /></label><label className="field"><span>Lieu / conditions</span><input value={draft.source_location} onChange={(event) => setDraft((current) => ({ ...current, source_location: event.target.value }))} placeholder="Ex. départ entrepôt, Marseille" /></label><label className="field"><span>Fiabilité de la source</span><select value={draft.confidence} onChange={(event) => setDraft((current) => ({ ...current, confidence: event.target.value }))}>{[['1', 'Très incertaine'], ['2', 'Incertaine'], ['3', 'Moyenne'], ['4', 'Bonne'], ['5', 'Vérifiée']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div><label className="field"><span>Source, conditions ou référence facture</span><textarea rows="2" value={draft.source_note} onChange={(event) => setDraft((current) => ({ ...current, source_note: event.target.value }))} placeholder="Ex. facture d’achat, prix annoncé au téléphone, publication…" /></label><label className="field"><span>Lien vers la source (facultatif)</span><input type="url" value={draft.source_url} onChange={(event) => setDraft((current) => ({ ...current, source_url: event.target.value }))} placeholder="https://…" /></label><div className="form-actions"><button type="button" className="button button-quiet" disabled={saving} onClick={() => setShowForm(false)}>Annuler</button><button type="submit" className="button button-primary" disabled={saving || !draft.amount_per_uvc}>{saving ? 'Enregistrement…' : 'Enregistrer le prix'}</button></div></form>}
+    {visible.length ? <div className="product-price-history-list">{[...supplierLatest.values()].map((item) => <article className="product-price-source-card" key={`source:${item.id}`}><div><span className={`product-price-type is-${item.price_type}`}>{({ traded: 'TRANSACTION', announced: 'ANNONCÉ', observed: 'RELEVÉ' })[item.price_type]}</span><strong>{contactLabel(item.contact_id)}</strong><small>{item.source_location || 'Lieu non précisé'} · {new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium' }).format(new Date(item.occurred_at))}</small></div><div><strong>{formatter(item.amount_per_uvc, item.currency)} <small>/ UVC</small></strong>{item.eur_per_uvc != null && <small>Cote EUR · {formatter(item.eur_per_uvc)} / UVC</small>}{item.source_note && <small>{item.source_note}</small>}{item.source_url && <a href={item.source_url} target="_blank" rel="noreferrer">Ouvrir la source</a>}</div></article>)}</div> : <p className="product-history-empty">Aucun prix validé. Ajoute une transaction, un prix annoncé ou un prix relevé pour construire la cote.</p>}
+    {legacyPrices.length > 0 && <details className="product-price-legacy"><summary>Prix consignés dans les échanges ({legacyPrices.length})</summary><div className="product-history-panel">{legacyPrices.map(({ row, exchange }) => <article className="product-history-entry" key={exchange.id}><div className="product-history-entry-heading"><strong>{exchange.scenario || exchange.category || 'Échange'}</strong><span>{new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium' }).format(new Date(exchange.occurred_at))}</span></div>{row.uvc_unit_price != null && <span>Prix UVC · {formatter(row.uvc_unit_price)}</span>}{row.pcb_unit_price != null && <span>Prix PCB · {formatter(row.pcb_unit_price)}</span>}{row.palette_unit_price != null && <span>Prix palette · {formatter(row.palette_unit_price)}</span>}{exchange.content && <p>{exchange.content}</p>}</article>)}</div></details>}
+  </div>;
 }
 
 function ProductPhotoEditor({ product, data, client, onClose, onRefresh, notify }) {
@@ -298,6 +367,7 @@ function App() {
     crm_actions: [], crm_exchange_products: [], crm_exchange_services: [],
     crm_exchange_transports: [], crm_exchange_handling_types: [], crm_exchange_storage_types: [],
     trade_payments: [], trade_expenses: [], trade_document_lines: [],
+    product_import_batches: [], product_import_rows: [], product_price_observations: [],
     media_assets: [], mediaUrls: {}, templates: [], trade_document_templates: [], business_issuer_templates: [],
   });
   const [loading, setLoading] = useState(true);
@@ -437,7 +507,8 @@ function App() {
         crmExchangeProducts, crmExchangeServices, crmExchangeTransports,
         crmExchangeHandlingTypes, crmExchangeStorageTypes, tradePayments, tradeExpenses,
         tradeDocumentLines, networkContactSocialLinks, networkCompanySocialLinks,
-        networkCompanyAddresses, networkCompanyBrands, networkCompanyCategories] = await Promise.all([
+        networkCompanyAddresses, networkCompanyBrands, networkCompanyCategories,
+        productImportBatches, productImportRows, productPriceObservations] = await Promise.all([
         fetchAll(supabase.from('manufacturers').select('*')),
         fetchAll(supabase.from('brands').select('*')),
         fetchAll(supabase.from('products').select('*').order('designation', { ascending: true })),
@@ -477,6 +548,9 @@ function App() {
         fetchAll(supabase.from('network_company_addresses').select('*')),
         fetchAll(supabase.from('network_company_brands').select('*')),
         fetchAll(supabase.from('network_company_categories').select('*')),
+        fetchAll(supabase.from('product_import_batches').select('*').order('created_at', { ascending: false })),
+        fetchAll(supabase.from('product_import_rows').select('*').order('row_number', { ascending: true })),
+        fetchAll(supabase.from('product_price_observations').select('*').order('occurred_at', { ascending: false })),
       ]);
       if (businessProfileResult.error) throw businessProfileResult.error;
       const paths = [...new Set([
@@ -490,6 +564,8 @@ function App() {
         ...businessIssuerTemplates.map((template) => template.logo_path),
         ...tradeDocuments.map((document) => document.file_path),
         ...tradeExpenses.map((expense) => expense.receipt_path),
+        ...productImportBatches.map((batch) => batch.storage_path),
+        ...productPriceObservations.map((observation) => observation.evidence_path),
       ].filter(Boolean))];
       mediaPathsRef.current = paths.filter((path) => !/^https?:\/\//i.test(path) && !path.startsWith('/brand-assets/'));
       const mediaUrls = Object.fromEntries([
@@ -527,6 +603,8 @@ function App() {
         crm_exchange_storage_types: crmExchangeStorageTypes,
         trade_payments: tradePayments, trade_expenses: tradeExpenses,
         trade_document_lines: tradeDocumentLines,
+        product_import_batches: productImportBatches, product_import_rows: productImportRows,
+        product_price_observations: productPriceObservations,
         media_assets: mediaAssets, mediaUrls, templates,
         trade_document_templates: templates,
         business_issuer_templates: businessIssuerTemplates,
@@ -558,6 +636,7 @@ function App() {
         crm_actions: [], crm_exchange_products: [], crm_exchange_services: [],
         crm_exchange_transports: [], crm_exchange_handling_types: [], crm_exchange_storage_types: [],
         trade_payments: [], trade_expenses: [], trade_document_lines: [],
+        product_import_batches: [], product_import_rows: [], product_price_observations: [],
         media_assets: [], mediaUrls: {}, templates: [], trade_document_templates: [],
       });
     }
