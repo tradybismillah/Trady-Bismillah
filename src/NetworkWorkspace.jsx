@@ -406,6 +406,8 @@ export default function NetworkWorkspace({ data, client, onRefresh, notify, onGe
         ? { p_case_id: activeCaseId, p_exchange, p_action: action, p_product_ids: selectedProductIds, p_service_ids: [] }
         : { p_title: exchangeDraft.case_title, p_exchange, p_contact_ids: relatedContactIds, p_action: action, p_product_ids: selectedProductIds, p_service_ids: [] });
       if (error) throw error;
+      if (!caseResult) throw new Error('Le serveur n’a pas renvoyé le dossier créé. Actualise la page avant de réessayer.');
+      if (!activeCaseId) setFocusedCaseId(caseResult);
        let relationshipWarning = '';
        if (!activeCaseId && caseResult) {
          const { error: primaryRoleError } = await client.from('crm_exchange_cases').update({ primary_contact_role: exchangeDraft.primary_contact_role || 'other' }).eq('id', caseResult);
