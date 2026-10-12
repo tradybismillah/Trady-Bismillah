@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Check, FileSpreadsheet, Link2, Search, Upload, X } from 'lucide-react';
+import { Check, FileSpreadsheet, FileText, Link2, Search, Upload, X } from 'lucide-react';
 import ModalBackdrop from './ModalA11y.jsx';
+import { MediaPicker } from './MediaLibrary.jsx';
 
 const fieldLabels = {
   designation: 'Désignation', ean_gtin: 'EAN / GTIN', source_reference: 'Référence fournisseur',
@@ -60,6 +61,9 @@ function exactProductMatch(row, products) {
 export default function ProductListingImport({ data, client, onRefresh, notify, onClose }) {
   const [tab, setTab] = useState('pending');
   const [file, setFile] = useState(null);
+  const [sourceAsset, setSourceAsset] = useState(null);
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [readingFile, setReadingFile] = useState(false);
   const [parsedRows, setParsedRows] = useState([]);
   const [headers, setHeaders] = useState([]);
   const [mapping, setMapping] = useState({});
@@ -85,20 +89,100 @@ export default function ProductListingImport({ data, client, onRefresh, notify, 
   const remainingRows = batchRows.filter((row) => ['pending', 'matched'].includes(row.status));
   const exchanges = data.crm_exchanges.filter((exchange) => exchange.contact_id === contactId)
     .sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at));
+  const linkedAssetIds = useMemo(() => {
+    const selectedExchange = exchanges.find((exchange) => exchange.id === exchangeId);
+    if (!selectedExchange?.case_id) return null;
+    return (data.crm_exchange_case_media || []).filter((link) => link.case_id === selectedExchange.case_id).map((link) => link.media_asset_id);
+  }, [exchanges, exchangeId, data.crm_exchange_case_media]);
+
+  const rowsFromText = (text) => {
+    const lines = text.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.length > 2);
+    const headerLine = lines.find((line) => /produit|designation|article|product/i.test(line) && /prix|price|ean|reference|ref/i.test(line));
+    const parseLine = (line) => {
+      const cells = line.includes('\t') ? line.split('\t') : line.includes(';') ? line.split(';') : line.split(/\s{2,}/);
+      if (cells.length > 1) return cells.map((cell) => cell.trim());
+      const price = line.match(/(?:^|\s)(\d+[,.]\d{1,4})\s*(?:€|EUR)?\s*$/i);
+      return price ? [line.slice(0, price.index).trim(), price[1]] : [line];
+    };
+    const headersText = headerLine ? parseLine(headerLine) : ['Désignation', 'Prix'];
+    const start = headerLine ? lines.indexOf(headerLine) + 1 : 0;
+    const outputHeaders = headersText.map((value, index) => value || `Colonne ${index + 1}`);
+    const rows = lines.slice(start).map(parseLine).filter((cells) => cells.some(Boolean)).map((cells) => Object.fromEntries(outputHeaders.map((header, index) => [header, cells[index] || ''])));
+    return { headers: outputHeaders, rows };
+  };
+
+  const readDocument = async (selectedFile) => {
+    const type = selectedFile.type || '';
+    if (type.startsWith('image/')) {
+      const { createWorker } = await import('tesseract.js');
+      const worker = await createWorker('fra+eng');
+      try {
+        const { data: result } = await worker.recognize(selectedFile);
+        return rowsFromText(result.text);
+      } finally { await worker.terminate(); }
+    }
+    const pdfjs = await import('pdfjs-dist');
+    pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+    const pdf = await pdfjs.getDocument({ data: await selectedFile.arrayBuffer() }).promise;
+    if (pdf.numPages > 20) throw new Error('Le PDF dépasse 20 pages. Sépare-le pour faciliter la vérification.');
+    const textLines = [];
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const content = await page.getTextContent();
+      let previousY = null;
+      let line = '';
+      for (const item of content.items) {
+        if (!item.str) continue;
+        const y = Math.round(item.transform[5]);
+        if (previousY != null && Math.abs(y - previousY) > 3) { if (line.trim()) textLines.push(line.trim()); line = ''; }
+        line += `${line ? ' ' : ''}${item.str}`;
+        previousY = y;
+      }
+      if (line.trim()) textLines.push(line.trim());
+    }
+    let parsed = rowsFromText(textLines.join('\n'));
+    if (parsed.rows.length < 2) {
+      const { createWorker } = await import('tesseract.js');
+      const worker = await createWorker('fra+eng');
+      try {
+        const ocrLines = [];
+        for (let pageNumber = 1; pageNumber <= Math.min(pdf.numPages, 5); pageNumber += 1) {
+          const page = await pdf.getPage(pageNumber);
+          const viewport = page.getViewport({ scale: 1.5 });
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width; canvas.height = viewport.height;
+          await page.render({ canvas, viewport }).promise;
+          const { data: result } = await worker.recognize(canvas);
+          ocrLines.push(result.text);
+        }
+        parsed = rowsFromText(ocrLines.join('\n'));
+      } finally { await worker.terminate(); }
+    }
+    return parsed;
+  };
 
   const onFile = async (selectedFile) => {
     setFile(selectedFile || null);
+    setSourceAsset(null);
     setParsedRows([]);
     if (!selectedFile) return;
+    setReadingFile(true);
     try {
       if (selectedFile.size > 20 * 1024 * 1024) throw new Error('Le fichier doit faire au maximum 20 Mo.');
-      const XLSX = await import('xlsx');
-      const workbook = XLSX.read(await selectedFile.arrayBuffer(), { type: 'array' });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+      const isSpreadsheet = /\.(xlsx?|csv)$/i.test(selectedFile.name);
+      let rows; let columns;
+      if (isSpreadsheet) {
+        const XLSX = await import('xlsx');
+        const workbook = XLSX.read(await selectedFile.arrayBuffer(), { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+        columns = Object.keys(rows[0] || {});
+      } else {
+        const extracted = await readDocument(selectedFile);
+        rows = extracted.rows; columns = extracted.headers;
+      }
       if (!rows.length) throw new Error('Aucune ligne de données trouvée dans la première feuille.');
       if (rows.length > 1000) throw new Error('Ce listing contient plus de 1 000 lignes. Découpe-le en plusieurs fichiers pour vérifier chaque import.');
-      const columns = Object.keys(rows[0] || {});
       if (!columns.length) throw new Error('Les en-têtes de colonnes n’ont pas été reconnus.');
       setHeaders(columns);
       setMapping(inferMapping(columns));
@@ -106,7 +190,23 @@ export default function ProductListingImport({ data, client, onRefresh, notify, 
     } catch (error) {
       setFile(null);
       notify(`Lecture du listing impossible : ${error.message}`, true);
-    }
+    } finally { setReadingFile(false); }
+  };
+
+  const onSelectMediaAsset = async (asset) => {
+    setShowMediaPicker(false);
+    setSourceAsset(asset);
+    setFile(null);
+    setReadingFile(true);
+    try {
+      const { data: blob, error } = await client.storage.from('catalogue-media').download(asset.storage_path);
+      if (error) throw error;
+      const selectedFile = new File([blob], asset.file_name, { type: asset.mime_type || blob.type });
+      setFile(selectedFile);
+      await onFile(selectedFile);
+      setSourceAsset(asset);
+    } catch (error) { setSourceAsset(null); notify(`Lecture du fichier impossible : ${error.message}`, true); }
+    finally { setReadingFile(false); }
   };
 
   const mappedRow = (raw) => {
@@ -136,10 +236,13 @@ export default function ProductListingImport({ data, client, onRefresh, notify, 
       const { data: auth, error: authError } = await client.auth.getSession();
       if (authError) throw authError;
       if (!auth.session?.user?.id) throw new Error('Session utilisateur introuvable.');
-      const safeName = file.name.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]/g, '-');
-      uploadedPath = `${auth.session.user.id}/product-listings/${crypto.randomUUID()}-${safeName}`;
-      const { error: uploadError } = await client.storage.from('catalogue-media').upload(uploadedPath, file, { upsert: false });
-      if (uploadError) throw uploadError;
+      if (sourceAsset) uploadedPath = sourceAsset.storage_path;
+      else {
+        const safeName = file.name.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]/g, '-');
+        uploadedPath = `${auth.session.user.id}/product-listings/${crypto.randomUUID()}-${safeName}`;
+        const { error: uploadError } = await client.storage.from('catalogue-media').upload(uploadedPath, file, { upsert: false });
+        if (uploadError) throw uploadError;
+      }
       const { data: batch, error: batchError } = await client.from('product_import_batches').insert({
         contact_id: contactId, exchange_id: exchangeId || null, file_name: file.name, storage_path: uploadedPath,
         source_role: sourceRole, price_side: priceSide, currency,
@@ -153,8 +256,10 @@ export default function ProductListingImport({ data, client, onRefresh, notify, 
         const { error: rowsError } = await client.from('product_import_rows').insert(rows.slice(start, start + 250));
         if (rowsError) throw rowsError;
       }
-      const { error: mediaError } = await client.from('media_assets').insert({ storage_path: uploadedPath, file_name: file.name, folder: 'Listings produits', mime_type: file.type || 'application/octet-stream', file_size: file.size });
-      if (mediaError) throw mediaError;
+      if (!sourceAsset) {
+        const { error: mediaError } = await client.from('media_assets').insert({ storage_path: uploadedPath, file_name: file.name, folder: 'Listings produits', mime_type: file.type || 'application/octet-stream', file_size: file.size });
+        if (mediaError) throw mediaError;
+      }
       await onRefresh();
       setSelectedBatchId(batch.id);
       setTab('pending');
@@ -163,7 +268,7 @@ export default function ProductListingImport({ data, client, onRefresh, notify, 
       notify('Listing conservé en attente de vérification.');
     } catch (error) {
       if (batchId) await client.from('product_import_batches').delete().eq('id', batchId);
-      if (uploadedPath) {
+      if (uploadedPath && !sourceAsset) {
         await client.from('media_assets').delete().eq('storage_path', uploadedPath);
         await client.storage.from('catalogue-media').remove([uploadedPath]);
       }
@@ -250,9 +355,11 @@ export default function ProductListingImport({ data, client, onRefresh, notify, 
     <div className="product-import-tabs" role="tablist" aria-label="Importations produits"><button type="button" role="tab" aria-selected={tab === 'pending'} className={tab === 'pending' ? 'is-active' : ''} onClick={() => setTab('pending')}>Listings <span>{pendingTotal}</span></button><button type="button" role="tab" aria-selected={tab === 'new'} className={tab === 'new' ? 'is-active' : ''} onClick={() => setTab('new')}>Importer un fichier</button></div>
     {tab === 'new' ? <form className="product-import-new" onSubmit={saveImport}>
       <div className="form-grid two-columns"><label className="field"><span>Contact qui a transmis le listing *</span><select required value={contactId} onChange={(event) => { setContactId(event.target.value); setExchangeId(''); }}><option value="">Choisir un contact</option>{data.network_contacts.map((contact) => <option key={contact.id} value={contact.id}>{displayContact(contact)}{data.network_companies.find((company) => company.id === contact.company_id)?.name ? ' · ' + data.network_companies.find((company) => company.id === contact.company_id).name : ''}</option>)}</select></label><label className="field"><span>Échange lié (facultatif)</span><select value={exchangeId} onChange={(event) => setExchangeId(event.target.value)} disabled={!contactId}><option value="">Aucun échange sélectionné</option>{exchanges.map((exchange) => <option key={exchange.id} value={exchange.id}>{new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium' }).format(new Date(exchange.occurred_at))} · {exchange.content.slice(0, 70) || 'Échange'}</option>)}</select></label><label className="field"><span>Le listing vient d’un…</span><select value={sourceRole} onChange={(event) => { setSourceRole(event.target.value); setPriceSide(event.target.value === 'supplier' ? 'purchase' : 'sale'); }}><option value="supplier">Fournisseur</option><option value="customer">Client</option><option value="other">Autre contact</option></select></label><label className="field"><span>Prix du listing côté…</span><select value={priceSide} onChange={(event) => setPriceSide(event.target.value)}><option value="purchase">Achat</option><option value="sale">Vente</option></select></label><label className="field"><span>Devise</span><select value={currency} onChange={(event) => setCurrency(event.target.value)}>{['EUR', 'USD', 'GBP', 'DZD', 'MAD', 'CHF'].map((code) => <option key={code}>{code}</option>)}</select></label>{currency !== 'EUR' && <label className="field"><span>1 {currency} en EUR (taux saisi)</span><input type="number" min="0.000001" step="any" value={eurRate} onChange={(event) => setEurRate(event.target.value)} placeholder="Facultatif pour la cote EUR" /></label>}<label className="field"><span>Lieu ou zone de prix</span><input value={sourceLocation} onChange={(event) => setSourceLocation(event.target.value)} placeholder="Ex. départ entrepôt, Marseille" /></label><label className="field"><span>Le prix du fichier est exprimé par…</span><select value={priceBasis} onChange={(event) => setPriceBasis(event.target.value)}><option value="uvc">UVC</option><option value="pcb">PCB / colis</option><option value="palette">Palette</option></select></label></div>
-      <label className="product-import-drop"><Upload size={20} /><strong>{file?.name || 'Choisir un listing Excel ou CSV'}</strong><small>.xlsx, .xls ou .csv · 20 Mo maximum · première feuille lue</small><input type="file" accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" onChange={(event) => onFile(event.target.files?.[0])} /></label>
+      <label className="product-import-drop"><Upload size={20} /><strong>{readingFile ? 'Lecture et extraction en cours…' : file?.name || 'Importer un listing depuis votre appareil'}</strong><small>Excel, CSV, PDF ou image JPEG/PNG · 20 Mo maximum{file && /\.pdf$/i.test(file.name) ? ' · PDF limité à 20 pages' : ''}</small><input type="file" accept=".xlsx,.xls,.csv,.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" disabled={readingFile} onChange={(event) => onFile(event.target.files?.[0])} /></label>
+      <div className="product-import-library-source"><FileText size={15} /><span>{exchangeId ? 'Choisis une pièce jointe de cet échange ou un fichier de la médiathèque.' : 'Tu peux aussi choisir un fichier déjà présent dans la médiathèque.'}</span><button type="button" className="button button-quiet button-small" disabled={readingFile} onClick={() => setShowMediaPicker(true)}>Choisir dans la médiathèque</button></div>
+      {parsedRows.length > 0 && file && !/\.(xlsx?|csv)$/i.test(file.name) && <p className="muted product-import-ocr-note">Extraction automatique à vérifier : les documents scannés ou les photos peuvent contenir des erreurs de lecture.</p>}
       {headers.length > 0 && <section className="product-import-mapping"><div><h3>Vérifier les colonnes reconnues</h3><p className="muted">Contrôle les correspondances avant de conserver les lignes en attente.</p></div><div className="product-import-mapping-grid">{Object.entries(fieldLabels).map(([field, label]) => <label className="field" key={field}><span>{label}</span><select value={mapping[field] || ''} onChange={(event) => setMapping((current) => ({ ...current, [field]: event.target.value }))}><option value="">Non présent</option>{headers.map((header) => <option key={header} value={header}>{header}</option>)}</select></label>)}</div><div className="product-import-preview"><strong>Aperçu · {parsedRows.length} lignes détectées</strong><div className="product-import-preview-scroll"><table><thead><tr><th>Ligne</th><th>Désignation extraite</th><th>Référence / EAN</th><th>Prix source</th></tr></thead><tbody>{parsedRows.slice(0, 8).map((raw, index) => { const row = mappedRow(raw); return <tr key={index}><td>{index + 2}</td><td>{row.designation || 'À mapper'}</td><td>{row.source_reference || row.ean_gtin || '—'}</td><td>{row.source_price == null ? '—' : `${row.source_price} ${currency} / ${priceBasis}`}</td></tr>; })}</tbody></table></div></div></section>}
-      <div className="form-actions"><button className="button button-quiet" type="button" disabled={saving} onClick={onClose}>Annuler</button><button className="button button-primary" type="submit" disabled={saving || !file || !contactId || !parsedRows.length}>{saving ? 'Enregistrement…' : 'Conserver en attente'}</button></div>
+      <div className="form-actions"><button className="button button-quiet" type="button" disabled={saving} onClick={onClose}>Annuler</button><button className="button button-primary" type="submit" disabled={saving || readingFile || !file || !contactId || !parsedRows.length}>{saving ? 'Enregistrement…' : 'Conserver en attente'}</button></div>
     </form> : <div className="product-import-review">
       {!allBatches.length ? <div className="empty-state"><FileSpreadsheet size={22} /><h3>Aucun listing importé</h3><p>Les fichiers importés apparaîtront ici pendant leur vérification et resteront consultables après validation.</p><button className="button button-primary" type="button" onClick={() => setTab('new')}>Importer un listing</button></div> : <>
         <div className="product-import-batch-bar"><label className="field"><span>Listing à consulter</span><select value={selectedBatch?.id || ''} onChange={(event) => { setSelectedBatchId(event.target.value); setRowDrafts({}); }}><option value="">Choisir une importation</option>{allBatches.map((batch) => { const contact = data.network_contacts.find((item) => item.id === batch.contact_id); return <option key={batch.id} value={batch.id}>{batch.file_name} · {displayContact(contact)} · {({ review: 'À vérifier', partial: 'Partiel', completed: 'Terminé', cancelled: 'Annulé' })[batch.status]}</option>; })}</select></label>{selectedBatch && <div className="product-import-batch-info"><strong>{remainingRows.length} ligne{remainingRows.length === 1 ? '' : 's'} à vérifier · {selectedBatch.row_count} au total</strong><span>{contactLabelForBatch(selectedBatch, data)} · {selectedBatch.source_location || 'Lieu non précisé'} · {selectedBatch.price_side === 'purchase' ? 'Côté achat' : 'Côté vente'}</span>{data.mediaUrls?.[selectedBatch.storage_path] && <a href={data.mediaUrls[selectedBatch.storage_path]} target="_blank" rel="noreferrer"><Link2 size={13} /> Ouvrir le fichier source</a>}</div>}</div>
@@ -275,5 +382,5 @@ export default function ProductListingImport({ data, client, onRefresh, notify, 
           })}{!filteredRows.length && remainingRows.length > 0 && <p className="muted">Aucune ligne ne correspond au filtre.</p>}</div></>}
       </>}
     </div>}
-  </section></ModalBackdrop>;
+  </section>{showMediaPicker && <MediaPicker data={data} documents assetIds={linkedAssetIds} onClose={() => setShowMediaPicker(false)} onSelect={onSelectMediaAsset} />}</ModalBackdrop>;
 }

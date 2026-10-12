@@ -23,14 +23,18 @@ function formatSize(size) {
   return `${(bytes / 1024 / 1024).toFixed(1)} Mo`;
 }
 
-export function MediaPicker({ data, onSelect, onClose }) {
+export function MediaPicker({ data, onSelect, onClose, documents = false, assetIds = null }) {
   const [search, setSearch] = useState('');
-  const entries = useMemo(() => data.media_assets.filter((asset) => String(asset.mime_type || '').startsWith('image/') && asset.file_name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())), [data.media_assets, search]);
+  const entries = useMemo(() => data.media_assets.filter((asset) => {
+    const isImage = String(asset.mime_type || '').startsWith('image/');
+    const isPdf = String(asset.mime_type || '').includes('pdf') || /\.pdf$/i.test(asset.file_name || '');
+    return (!assetIds || assetIds.includes(asset.id)) && (documents ? isImage || isPdf : isImage) && asset.file_name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase());
+  }), [data.media_assets, search, documents, assetIds]);
   return <ModalBackdrop onClose={onClose}>
     <section className="modal-card modal-wide media-picker" role="dialog" aria-modal="true" aria-labelledby="media-picker-title">
-      <div className="modal-heading"><div className="modal-heading-start"><span className="directory-modal-icon"><Images size={18} /></span><h2 id="media-picker-title">Choisir une image de la médiathèque</h2></div><button type="button" className="icon-button" onClick={onClose} aria-label="Fermer"><X size={17} /></button></div>
+        <div className="modal-heading"><div className="modal-heading-start"><span className="directory-modal-icon"><Images size={18} /></span><h2 id="media-picker-title">{documents ? 'Choisir un fichier de la médiathèque' : 'Choisir une image de la médiathèque'}</h2></div><button type="button" className="icon-button" onClick={onClose} aria-label="Fermer"><X size={17} /></button></div>
       <label className="search-input media-picker-search"><Search size={16} /><input autoFocus type="search" placeholder="Rechercher une image…" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
-      {entries.length ? <div className="media-picker-grid">{entries.map((asset) => <button type="button" className="media-picker-item" key={asset.id} onClick={() => onSelect(asset)}><img src={imageUrl(data, asset.storage_path)} alt="" /><span>{asset.file_name}</span><small>{asset.folder}</small></button>)}</div> : <div className="empty-state media-picker-empty"><span className="empty-icon"><ImagePlus size={21} /></span><h2>Aucune image trouvée</h2><p>Importe des photos dans la page Médiathèque pour les réutiliser ici.</p></div>}
+        {entries.length ? <div className="media-picker-grid">{entries.map((asset) => <button type="button" className="media-picker-item" key={asset.id} onClick={() => onSelect(asset)}>{String(asset.mime_type || '').startsWith('image/') ? <img src={imageUrl(data, asset.storage_path)} alt="" /> : <span className="media-picker-file-icon"><FileText size={26} /></span>}<span>{asset.file_name}</span><small>{asset.folder}</small></button>)}</div> : <div className="empty-state media-picker-empty"><span className="empty-icon"><ImagePlus size={21} /></span><h2>Aucun fichier trouvé</h2><p>Les pièces jointes disponibles apparaîtront ici.</p></div>}
     </section>
   </ModalBackdrop>;
 }
