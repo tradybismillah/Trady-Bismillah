@@ -53,6 +53,27 @@ function contactDisplayName(contact) {
   return nickname || personName || (String(contact?.email || '').includes('@') ? contact.email : '') || 'Contact';
 }
 
+function facebookIdentity(contact, data) {
+  const social = (data.network_contact_social_links || []).find((link) => link.contact_id === contact?.id && /facebook/i.test(link.platform || ''));
+  const url = String(social?.url || contact?.facebook_messenger_url || '').trim();
+  if (!url) return '';
+  try {
+    const parsed = new URL(/^https?:\/\//i.test(url) ? url : `https://${url}`);
+    const path = parsed.pathname.split('/').filter(Boolean);
+    const lastSegment = path.at(-1) || '';
+    const username = lastSegment && !['profile.php', 'messages', 't'].includes(lastSegment.toLowerCase()) ? decodeURIComponent(lastSegment).replace(/^@/, '') : '';
+    const id = parsed.searchParams.get('id');
+    return username ? `Facebook · ${username}` : id ? `Facebook · ${id}` : 'Facebook';
+  } catch {
+    return 'Facebook';
+  }
+}
+
+function contactDirectoryName(contact, company, data) {
+  const name = contactDisplayName(contact);
+  return name !== 'Contact' ? name : facebookIdentity(contact, data) || company?.name || name;
+}
+
 function contactOptionName(contact, companies) {
   const company = companies.find((item) => item.id === contact.company_id)?.name;
   if (contactDisplayName(contact) === 'Contact' && company) return company;
@@ -217,11 +238,12 @@ export default function NetworkWorkspace({ data, client, onRefresh, notify, onGe
   }, [contactExchangeRequest, contacts]);
   const rows = useMemo(() => (tab === 'contacts' ? contacts : companies).filter((row) => {
     const company = tab === 'contacts' ? companies.find((entry) => entry.id === row.company_id)?.name : '';
+    const socialLinks = tab === 'contacts' ? (data.network_contact_social_links || []).filter((link) => link.contact_id === row.id).map((link) => `${link.platform || ''} ${link.url || ''}`) : [];
     const haystack = tab === 'contacts'
-      ? [row.first_name, row.last_name, row.nickname, row.job_role, company, row.email, row.phone_number, row.mobile_number, row.whatsapp_number, row.city, row.region, row.country]
+      ? [row.first_name, row.last_name, row.nickname, row.job_role, company, row.email, row.phone_number, row.mobile_number, row.whatsapp_number, row.facebook_messenger_url, row.linkedin_messenger_url, row.city, row.region, row.country, ...socialLinks]
       : [row.name, row.main_activity, row.email, row.phone_number, row.headquarters_city, row.headquarters_region, row.country, ...Object.values(row.legal_identifiers || {})];
     return haystack.filter(Boolean).join(' ').toLocaleLowerCase().includes(search.trim().toLocaleLowerCase());
-  }), [tab, contacts, companies, search]);
+  }), [tab, contacts, companies, data.network_contact_social_links, search]);
   const contactsFor = (company) => contacts.filter((contact) => contact.company_id === company.id);
   const startNew = (kind) => { setSelected(null); setEditing(kind); setDraft({ ...(kind === 'company' ? companyDefaults : contactDefaults) }); setPhotoFile(null); setPhotoPath(''); };
   const createCompanyFromContact = async (event) => {
@@ -536,10 +558,11 @@ export default function NetworkWorkspace({ data, client, onRefresh, notify, onGe
     <div className="table-tools"><label className="search-input"><Search size={16} /><input type="search" placeholder={`Rechercher ${tab === 'contacts' ? 'un contact, une société' : 'une société'}…`} value={search} onChange={(event) => setSearch(event.target.value)} /></label><span className="result-count">{rows.length} fiche{rows.length > 1 ? 's' : ''} sur {(tab === 'contacts' ? contacts : companies).length}</span></div>
     {!rows.length ? <div className="empty-state"><span className="empty-icon">{tab === "contacts" ? <ContactRound size={22} /> : <Building2 size={22} />}</span><h2>{search ? "Aucun résultat" : tab === "contacts" ? "Aucune personne enregistrée" : "Aucune société enregistrée"}</h2><p>{search ? "Essaie un autre nom, numéro ou e-mail." : tab === "contacts" ? "Crée un contact nommé ou ajoute une société." : "Crée une société, même sans contact à lui rattacher."}</p><div className="network-empty-actions"><button className="button button-quiet" type="button" onClick={() => startNew("company")}><Building2 size={15} /> Nouvelle société</button><button className="button button-primary" type="button" onClick={() => startNew("contact")}><Plus size={15} /> Nouveau contact</button></div></div> : <div className="record-grid">{rows.map((row) => {
       const company = tab === 'contacts' ? companies.find((entry) => entry.id === row.company_id) : null;
-      const name = tab === 'contacts' ? contactDisplayName(row) : row.name;
+      const name = tab === 'contacts' ? contactDirectoryName(row, company, data) : row.name;
       const count = tab === 'contacts' ? null : contactsFor(row).length;
       const photo = tab === 'contacts' && row.contact_photo_path ? data.mediaUrls?.[row.contact_photo_path] : '';
-      return <article className="record-card network-record-card" key={row.id} role="button" tabIndex={0} onClick={() => tab === 'contacts' ? openContact(row) : setSelected({ kind: 'company', row })} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); tab === 'contacts' ? openContact(row) : setSelected({ kind: 'company', row }); } }}>{photo ? <img className="network-avatar network-avatar-photo" src={photo} alt="" /> : <span className="network-avatar">{tab === 'contacts' ? <ContactRound size={19} /> : <Building2 size={19} />}</span>}<div className="record-card-body"><span className="reference-label">{tab === 'contacts' ? 'PERSONNE' : 'SOCIÉTÉ'}</span><h3>{name || 'Nom manquant'}</h3><p>{tab === 'contacts' ? [row.job_role, company?.name].filter(Boolean).join(' · ') || row.email || 'Contact' : row.main_activity || row.email || 'Société du réseau'}</p><div className="card-meta"><span>{tab === 'contacts' ? [row.city, row.country].filter(Boolean).join(', ') || 'Localisation à renseigner' : `${count} contact${count > 1 ? 's' : ''}`}</span><span>{row.email || ''}</span></div></div></article>;
+      const facebook = tab === 'contacts' ? facebookIdentity(row, data) : '';
+      return <article className="record-card network-record-card" key={row.id} role="button" tabIndex={0} onClick={() => tab === 'contacts' ? openContact(row) : setSelected({ kind: 'company', row })} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); tab === 'contacts' ? openContact(row) : setSelected({ kind: 'company', row }); } }}>{photo ? <img className="network-avatar network-avatar-photo" src={photo} alt="" /> : <span className="network-avatar">{tab === 'contacts' ? <ContactRound size={19} /> : <Building2 size={19} />}</span>}<div className="record-card-body"><span className="reference-label">{tab === 'contacts' ? 'PERSONNE' : 'SOCIÉTÉ'}</span><h3>{name || 'Nom manquant'}</h3><p>{tab === 'contacts' ? [row.job_role, company?.name].filter(Boolean).join(' · ') || facebook || row.email || 'Contact' : row.main_activity || row.email || 'Société du réseau'}</p><div className="card-meta"><span>{tab === 'contacts' ? [row.city, row.country].filter(Boolean).join(', ') || 'Localisation à renseigner' : `${count} contact${count > 1 ? 's' : ''}`}</span><span>{row.email || ''}</span></div></div></article>;
     })}</div>}
 
     {detail && <ModalBackdrop onClose={() => setSelected(null)}><section className="modal-card modal-wide network-contact-modal" role="dialog" aria-modal="true" aria-labelledby="network-detail-title"><div className="modal-heading"><div className="modal-heading-start"><span className="directory-modal-icon">{detailKind === 'company' ? <Building2 size={18} /> : <ContactRound size={18} />}</span><h2 id="network-detail-title">{detailKind === 'company' ? detail.name : contactDisplayName(detail)}</h2></div><button type="button" className="icon-button" onClick={() => setSelected(null)} aria-label="Fermer"><X size={17} /></button></div>
